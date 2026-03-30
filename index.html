@@ -1,0 +1,2816 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SWPlan — Plan de Switch Réseau</title>
+
+  <!-- Tailwind CSS (CDN, aucune installation requise) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- html2canvas : capture l'écran en PNG -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- jsPDF : génère des fichiers PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Configuration Tailwind : mode sombre basé sur la classe "dark" -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts : Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ========================================================
+       STYLES GLOBAUX
+    ======================================================== */
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    /* ========================================================
+       WRAPPER RACK — contient les pattes + le châssis
+    ======================================================== */
+    .rack-switch-wrapper {
+      display: inline-flex;
+      align-items: stretch;
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.55)) drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+      min-width: 100%;
+    }
+
+    /* ── Pattes de fixation rack ────────────────────────── */
+    .rack-ear {
+      width: 38px;
+      flex-shrink: 0;
+      background: linear-gradient(180deg, #3a4555 0%, #28323f 50%, #3a4555 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-around;
+      padding: 10px 0;
+      border-top: 1px solid #556070;
+      border-bottom: 1px solid #1a202c;
+      position: relative;
+    }
+    /* Ligne de jonction entre la patte et le corps */
+    .rack-ear-left {
+      border-radius: 4px 0 0 4px;
+      border-left: 1px solid #556070;
+      border-right: 2px solid #111827;
+      box-shadow: inset -3px 0 6px rgba(0,0,0,0.4);
+    }
+    .rack-ear-right {
+      border-radius: 0 4px 4px 0;
+      border-right: 1px solid #556070;
+      border-left: 2px solid #111827;
+      box-shadow: inset 3px 0 6px rgba(0,0,0,0.4);
+    }
+    /* Reflet en haut de la patte */
+    .rack-ear::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 6px; right: 6px;
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* Vis de fixation rack */
+    .rack-screw {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 30%, #8a9db5, #3d4a5c 55%, #1f2836);
+      border: 1px solid #4a5568;
+      box-shadow:
+        inset 0 2px 5px rgba(0,0,0,0.7),
+        inset 0 -1px 1px rgba(255,255,255,0.05),
+        0 1px 0 rgba(255,255,255,0.07);
+      position: relative;
+      flex-shrink: 0;
+    }
+    /* Fente cruciforme Phillips */
+    .rack-screw::before, .rack-screw::after {
+      content: '';
+      position: absolute;
+      background: rgba(0,0,0,0.6);
+      border-radius: 1px;
+      top: 50%; left: 50%;
+    }
+    .rack-screw::before { width: 9px; height: 2px; transform: translate(-50%,-50%); }
+    .rack-screw::after  { width: 2px; height: 9px; transform: translate(-50%,-50%); }
+
+    /* ── Corps principal du switch (panneau avant) ──────── */
+    .switch-chassis {
+      flex: 1;
+      background: linear-gradient(180deg, #232d3b 0%, #161e28 60%, #1e2836 100%);
+      border-radius: 0;
+      padding: 12px 16px 12px 16px;
+      border-top: 1px solid #3d4f62;
+      border-bottom: 1px solid #0d1117;
+      position: relative;
+      /* Lignes de texture horizontales (fines rayures) */
+      background-image:
+        linear-gradient(180deg, #232d3b 0%, #161e28 60%, #1e2836 100%),
+        repeating-linear-gradient(
+          180deg,
+          transparent,
+          transparent 3px,
+          rgba(0,0,0,0.12) 3px,
+          rgba(0,0,0,0.12) 4px
+        );
+      background-blend-mode: normal;
+    }
+
+    /* Reflet en haut du panneau */
+    .switch-chassis::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+      pointer-events: none;
+    }
+
+    /* En-tête du châssis : LED + nom + modèle */
+    .chassis-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Zone des LEDs système (groupe à droite) */
+    .chassis-leds {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* LED individuelle (status, power, activity) */
+    .sys-led {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    /* LED de status (verte clignotante) */
+    .status-led {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #48bb78;
+      box-shadow: 0 0 5px #48bb78, 0 0 10px rgba(72,187,120,0.25);
+      animation: blink 2s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    /* Zone de ports (légèrement enfoncée, style baie) */
+    .port-panel {
+      background: #0e1520;
+      border-radius: 3px;
+      padding: 8px 10px;
+      border: 1px solid #1a2535;
+      box-shadow:
+        inset 0 2px 6px rgba(0,0,0,0.6),
+        inset 0 1px 2px rgba(0,0,0,0.4);
+    }
+
+    /* Grilles de ventilation (déportées à droite du châssis) */
+    .vent-lines {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      opacity: 0.5;
+    }
+    .vent-lines span {
+      display: block;
+      width: 16px;
+      height: 1px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 1px;
+    }
+
+    /* ========================================================
+       GRILLE DES PORTS
+    ======================================================== */
+    .ports-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ports-row {
+      display: flex;
+      gap: 5px;
+      flex-wrap: nowrap;
+    }
+
+    /* Un port individuel */
+    .port {
+      width: 42px;
+      height: 36px;
+      border-radius: 4px;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.1s, box-shadow 0.15s, filter 0.15s;
+      border: 1.5px solid rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    /* Port sans VLAN assigné */
+    .port.unassigned {
+      background: linear-gradient(180deg, #4a5568 0%, #2d3748 100%);
+      border-color: #1a202c;
+    }
+
+    /* Petit connecteur RJ45 dessiné en CSS */
+    .port-connector {
+      width: 18px;
+      height: 10px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 1px 1px 3px 3px;
+      border: 1px solid rgba(0,0,0,0.6);
+      margin-bottom: 2px;
+    }
+
+    /* Numéro du port */
+    .port-number {
+      font-size: 9px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+      line-height: 1;
+    }
+
+    /* Port avec VLAN : la couleur du VLAN remplace le fond gris */
+    .port.assigned .port-number {
+      color: rgba(255,255,255,0.95);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .port.assigned .port-connector {
+      background: rgba(0,0,0,0.35);
+    }
+
+    /* Effets hover et sélection */
+    .port:hover {
+      transform: scale(1.08);
+      z-index: 10;
+      filter: brightness(1.2);
+    }
+    .port.selected {
+      outline: 2.5px solid #63b3ed;
+      outline-offset: 2px;
+      transform: scale(1.1);
+      z-index: 20;
+    }
+
+    /* LED du port (petit point en haut à droite) */
+    .port-led {
+      position: absolute;
+      top: 3px;
+      right: 4px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #48bb78;
+      box-shadow: 0 0 3px #48bb78;
+    }
+    .port.unassigned .port-led {
+      background: #f6ad55;
+      box-shadow: 0 0 3px #f6ad55;
+    }
+
+    /* Séparateur entre groupes de ports SFP */
+    .sfp-separator {
+      width: 12px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sfp-separator::after {
+      content: '';
+      display: block;
+      width: 1px;
+      height: 30px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* Ports SFP (uplink) : légèrement différents */
+    .port.sfp {
+      width: 42px;
+      height: 36px;
+      background: linear-gradient(180deg, #553c9a 0%, #322659 100%);
+      border-color: #44337a;
+    }
+    .port.sfp .port-connector {
+      width: 22px;
+      height: 8px;
+      border-radius: 2px;
+    }
+
+    /* ========================================================
+       PORTS COMPACTS — switchs 48 et 52 ports
+       On réduit la taille pour tenir sur l'écran
+    ======================================================== */
+    .chassis-large .port {
+      width: 31px;
+      height: 29px;
+    }
+    .chassis-large .port .port-connector {
+      width: 13px;
+      height: 7px;
+      margin-bottom: 1px;
+    }
+    .chassis-large .port.sfp {
+      width: 31px;
+      height: 29px;
+    }
+    .chassis-large .port.sfp .port-connector {
+      width: 17px;
+      height: 6px;
+    }
+    .chassis-large .port .port-number {
+      font-size: 7px;
+    }
+    .chassis-large .ports-row {
+      gap: 3px;
+    }
+
+    /* ========================================================
+       BADGE "TRUNK" affiché sur les ports multi-VLANs
+    ======================================================== */
+    .port-trunk-badge {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      font-size: 5.5px;
+      font-weight: 900;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      border-radius: 2px;
+      padding: 1px 2px;
+      line-height: 1.3;
+      letter-spacing: 0.3px;
+      pointer-events: none;
+    }
+
+    /* ========================================================
+       BADGE LACP affiché en bas du port agrégé
+    ======================================================== */
+    .port-lacp-badge {
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 5.5px;
+      font-weight: 900;
+      color: white;
+      line-height: 1.3;
+      letter-spacing: 0.2px;
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+
+    /* ========================================================
+       OVERLAY LACP — barre colorée sous les ports
+    ======================================================== */
+    .lacp-overlay-row {
+      position: relative;
+      height: 20px;
+      margin-top: 3px;
+    }
+    .lacp-bracket {
+      position: absolute;
+      height: 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .lacp-bracket-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: white;
+      background: rgba(0,0,0,0.25);
+      padding: 1px 5px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .lacp-bracket-desc {
+      font-size: 8px;
+      color: rgba(255,255,255,0.75);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Boutons de port dans le modal LACP */
+    .lacp-port-btn {
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+      border: 1.5px solid transparent;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .lacp-port-btn.idle {
+      background: #374151;
+      color: #9ca3af;
+      border-color: #1f2937;
+    }
+    .lacp-port-btn.idle:hover { background: #4b5563; color: #d1d5db; }
+    .lacp-port-btn.selected {
+      color: white;
+      border-color: rgba(255,255,255,0.3);
+      transform: scale(1.08);
+    }
+
+    /* ========================================================
+       TOOLTIP au survol du port
+    ======================================================== */
+    .port-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.95);
+      color: white;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 100;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .port:hover .port-tooltip { opacity: 1; }
+
+    /* ========================================================
+       MODAL de sélection VLAN
+    ======================================================== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal-box {
+      transform: scale(0.95) translateY(10px);
+      transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal-box {
+      transform: scale(1) translateY(0);
+    }
+
+    /* ========================================================
+       SCROLLBAR personnalisée
+    ======================================================== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+
+    /* ========================================================
+       ZONE D'EXPORT (cachée visuellement mais présente pour
+       la capture html2canvas)
+    ======================================================== */
+    #export-area {
+      display: none;
+    }
+
+    /* ========================================================
+       ANIMATIONS
+    ======================================================== */
+    .fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========================================================
+       IMPRESSION / EXPORT VISUEL
+       Zone capturée pour les exports PNG/PDF
+    ======================================================== */
+    .export-card {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      min-width: 700px;
+    }
+    .dark .export-preview .export-card {
+      background: #1a202c;
+      color: white;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen transition-colors duration-300">
+
+  <!-- ============================================================
+       BARRE DE NAVIGATION SUPÉRIEURE
+  ============================================================ -->
+  <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm sticky top-0 z-50">
+    <div class="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+
+      <!-- Logo + Titre -->
+      <div class="flex items-center gap-3">
+        <!-- Icône switch stylisée -->
+        <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shadow-md">
+          <svg viewBox="0 0 24 24" fill="none" class="w-5 h-5 text-white" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="7" width="20" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="6" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="10" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="14" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="18" cy="12" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-gray-900 dark:text-white leading-tight">SWPlan</h1>
+          <p class="text-xs text-gray-400 dark:text-gray-500 leading-tight">Plan de switch réseau</p>
+        </div>
+      </div>
+
+      <!-- Actions centrales : Sélection du modèle -->
+      <div class="flex items-center gap-3">
+        <label class="text-sm font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">Modèle de switch</label>
+        <select id="switch-model"
+          class="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 text-sm rounded-lg px-3 py-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+          <option value="8">8 ports</option>
+          <option value="16">16 ports</option>
+          <option value="24" selected>24 ports</option>
+          <option value="28">28 ports (24 + 4 SFP)</option>
+          <option value="48">48 ports</option>
+          <option value="52">52 ports (48 + 4 SFP)</option>
+        </select>
+      </div>
+
+      <!-- Actions droite : sauvegarde + export + mode sombre -->
+      <div class="flex items-center gap-2">
+
+        <!-- Bouton : Sauvegarder la configuration (.swplan) -->
+        <button onclick="saveConfig()"
+          class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+          title="Sauvegarder la configuration dans un fichier .swplan">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+          </svg>
+          Sauvegarder
+        </button>
+
+        <!-- Bouton : Ouvrir une configuration existante -->
+        <button onclick="document.getElementById('load-config-input').click()"
+          class="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+          title="Ouvrir une configuration .swplan existante">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/>
+          </svg>
+          Ouvrir
+        </button>
+        <!-- Input fichier caché — déclenché par le bouton "Ouvrir" -->
+        <input type="file" id="load-config-input" accept=".swplan,.json"
+          class="hidden" onchange="loadConfig(event)" />
+
+        <!-- Séparateur visuel -->
+        <div class="w-px h-7 bg-gray-200 dark:bg-gray-600 mx-1"></div>
+
+        <!-- Bouton export PNG -->
+        <button onclick="exportPNG()"
+          class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          PNG
+        </button>
+
+        <!-- Bouton export PDF -->
+        <button onclick="exportPDF()"
+          class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+          </svg>
+          PDF
+        </button>
+
+        <!-- Toggle mode sombre / clair -->
+        <button id="theme-toggle" onclick="toggleDarkMode()"
+          class="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600"
+          title="Basculer le thème">
+          <!-- Icône soleil (mode clair) -->
+          <svg id="icon-sun" class="w-5 h-5 text-yellow-500 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+          </svg>
+          <!-- Icône lune (mode sombre) -->
+          <svg id="icon-moon" class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       CONTENU PRINCIPAL : Sidebar gauche + Zone centrale
+  ============================================================ -->
+  <div class="max-w-screen-2xl mx-auto px-6 py-6 flex gap-6">
+
+    <!-- ========================================================
+         SIDEBAR GAUCHE : Gestion des VLANs
+    ======================================================== -->
+    <aside class="w-72 flex-shrink-0 flex flex-col gap-4">
+
+      <!-- Panel : Informations du plan -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          Informations
+        </h2>
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Nom du site / Client</label>
+            <input type="text" id="plan-client" placeholder="ex: Entreprise Dupont"
+              class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors placeholder-gray-400"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Nom du switch</label>
+            <input type="text" id="plan-switch-name" placeholder="ex: SW-CORE-01"
+              class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors placeholder-gray-400"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date</label>
+            <input type="date" id="plan-date"
+              class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Technicien</label>
+            <input type="text" id="plan-tech" placeholder="ex: Jean Martin"
+              class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors placeholder-gray-400"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel : Gestion des VLANs -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm flex-1">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            VLANs
+          </h2>
+          <!-- Bouton : ajouter un VLAN -->
+          <button onclick="openAddVlanModal()"
+            class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+            </svg>
+            Ajouter
+          </button>
+        </div>
+
+        <!-- Liste des VLANs créés -->
+        <div id="vlan-list" class="flex flex-col gap-2">
+          <!-- Rempli dynamiquement par JavaScript -->
+        </div>
+
+        <!-- Message si aucun VLAN -->
+        <div id="vlan-empty" class="text-center py-6 text-gray-400 dark:text-gray-500">
+          <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+          </svg>
+          <p class="text-xs">Aucun VLAN défini.<br/>Cliquez sur "Ajouter" pour commencer.</p>
+        </div>
+      </div>
+
+      <!-- Panel : Agrégats LACP -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <!-- Icône chaîne (LACP = lien entre ports) -->
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            LACP / LAG
+          </h2>
+          <button onclick="openAddLacpModal()"
+            class="flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+            </svg>
+            Ajouter
+          </button>
+        </div>
+
+        <!-- Liste des agrégats LACP -->
+        <div id="lacp-list" class="flex flex-col gap-2"></div>
+
+        <!-- Message si aucun agrégat -->
+        <div id="lacp-empty" class="text-center py-4 text-gray-400 dark:text-gray-500">
+          <p class="text-xs">Aucun agrégat LACP.<br/>Cliquez sur "Ajouter" pour lier des ports.</p>
+        </div>
+      </div>
+
+      <!-- Panel : Aide rapide -->
+      <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+        <h3 class="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Utilisation
+        </h3>
+        <ol class="text-xs text-blue-600 dark:text-blue-300 space-y-1 list-decimal list-inside leading-relaxed">
+          <li>Créez vos VLANs avec une couleur</li>
+          <li>Cliquez sur un port → assignez un VLAN</li>
+          <li>Plusieurs VLANs = port trunk</li>
+          <li>Créez des agrégats LACP entre ports</li>
+          <li>Exportez en PNG ou PDF</li>
+        </ol>
+      </div>
+    </aside>
+
+    <!-- ========================================================
+         ZONE CENTRALE : Visualisation du switch + Légende
+    ======================================================== -->
+    <main class="flex-1 flex flex-col gap-6 min-w-0">
+
+      <!-- Switch principal -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+
+        <!-- En-tête de la carte : nom du switch sélectionné -->
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100" id="switch-title">
+              Switch 24 ports
+            </h2>
+            <p class="text-xs text-gray-400 dark:text-gray-500" id="switch-subtitle">
+              Cliquez sur un port pour lui assigner un VLAN
+            </p>
+          </div>
+          <!-- Bouton reset -->
+          <button onclick="resetAllPorts()"
+            class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent hover:border-red-200 dark:hover:border-red-800">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Tout effacer
+          </button>
+        </div>
+
+        <!-- Châssis du switch (rendu dynamiquement) -->
+        <div id="switch-chassis-container" class="overflow-x-auto pb-2">
+          <!-- Rempli par JavaScript -->
+        </div>
+      </div>
+
+      <!-- Légende des VLANs -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+        <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+          Légende des VLANs
+        </h2>
+
+        <!-- Grille de la légende -->
+        <div id="legend-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <!-- Rempli dynamiquement -->
+        </div>
+
+        <!-- Message si aucun VLAN -->
+        <div id="legend-empty" class="text-center py-4 text-gray-400 dark:text-gray-500 text-sm">
+          La légende apparaîtra ici une fois les VLANs créés.
+        </div>
+      </div>
+
+      <!-- Statistiques d'utilisation des ports -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+        <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+          Résumé d'utilisation
+        </h2>
+        <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <!-- Rempli dynamiquement -->
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================================
+       MODAL : Ajouter un VLAN
+  ============================================================ -->
+  <div id="modal-add-vlan" class="modal-overlay" onclick="closeModalIfOverlay(event, 'modal-add-vlan')">
+    <div class="modal-box bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-96 border border-gray-200 dark:border-gray-700">
+
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Nouveau VLAN</h3>
+        <button onclick="closeModal('modal-add-vlan')"
+          class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <!-- Numéro VLAN -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Numéro de VLAN</label>
+          <input type="number" id="vlan-id-input" min="1" max="4094" placeholder="ex: 10"
+            class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"/>
+          <p class="text-xs text-gray-400 mt-1">Entre 1 et 4094</p>
+        </div>
+
+        <!-- Nom du VLAN -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom du VLAN</label>
+          <input type="text" id="vlan-name-input" placeholder="ex: LAN Utilisateurs"
+            class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"/>
+        </div>
+
+        <!-- Description optionnelle -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Description <span class="text-gray-400 font-normal">(optionnel)</span>
+          </label>
+          <input type="text" id="vlan-desc-input" placeholder="ex: Réseau bureautique RDC"
+            class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"/>
+        </div>
+
+        <!-- Couleur -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Couleur</label>
+          <!-- Palette de couleurs prédéfinies -->
+          <div class="grid grid-cols-8 gap-2 mb-2" id="color-palette">
+            <!-- Générée par JavaScript -->
+          </div>
+          <!-- Saisie manuelle de couleur -->
+          <div class="flex items-center gap-2 mt-2">
+            <input type="color" id="vlan-color-custom" value="#3b82f6"
+              class="w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer bg-transparent p-0.5"/>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Ou choisissez une couleur personnalisée</span>
+          </div>
+          <!-- Couleur actuellement sélectionnée -->
+          <div id="selected-color-preview" class="mt-2 flex items-center gap-2">
+            <div id="color-preview-dot" class="w-5 h-5 rounded-full border-2 border-white shadow-md"></div>
+            <span id="color-preview-text" class="text-xs text-gray-500 dark:text-gray-400"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Boutons de validation -->
+      <div class="flex gap-3 mt-6">
+        <button onclick="closeModal('modal-add-vlan')"
+          class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium py-2.5 rounded-xl transition-colors">
+          Annuler
+        </button>
+        <button onclick="saveVlan()"
+          class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 rounded-xl transition-colors shadow-md">
+          Créer le VLAN
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL : Assigner un VLAN à un port
+  ============================================================ -->
+  <div id="modal-assign-vlan" class="modal-overlay" onclick="closeModalIfOverlay(event, 'modal-assign-vlan')">
+    <div class="modal-box bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-80 border border-gray-200 dark:border-gray-700">
+
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100" id="assign-modal-title">Port 1</h3>
+          <p class="text-xs text-gray-400 dark:text-gray-500" id="assign-modal-subtitle">Sélectionnez un VLAN</p>
+        </div>
+        <button onclick="closeModal('modal-assign-vlan')"
+          class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Description libre du port -->
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Description du port</label>
+        <input type="text" id="port-desc-input" placeholder="ex: PC Bureau 12, Imprimante..."
+          class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"/>
+      </div>
+
+      <!-- Liste des VLANs disponibles -->
+      <div id="assign-vlan-list" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+        <!-- Rempli dynamiquement -->
+      </div>
+
+      <!-- Note trunk -->
+      <p class="text-xs text-gray-400 dark:text-gray-500 mt-2 mb-1">
+        Cochez plusieurs VLANs pour créer un port <strong>trunk</strong>.
+      </p>
+
+      <!-- Boutons de validation -->
+      <div class="flex gap-2 mt-2">
+        <button onclick="clearPort()"
+          class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 text-gray-600 dark:text-gray-300 text-sm font-medium py-2.5 rounded-xl transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800">
+          Tout effacer
+        </button>
+        <button onclick="savePortVlans()"
+          class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 rounded-xl transition-colors shadow-md">
+          Enregistrer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL : Créer un agrégat LACP
+  ============================================================ -->
+  <div id="modal-add-lacp" class="modal-overlay" onclick="closeModalIfOverlay(event, 'modal-add-lacp')">
+    <div class="modal-box bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-[480px] border border-gray-200 dark:border-gray-700">
+
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Agrégat LACP / LAG</h3>
+          <p class="text-xs text-gray-400 mt-0.5">Sélectionnez les ports à agréger</p>
+        </div>
+        <button onclick="closeModal('modal-add-lacp')"
+          class="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-500">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <!-- Nom de l'agrégat -->
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Nom de l'agrégat</label>
+            <input type="text" id="lacp-name-input" placeholder="ex: Po1, Bond0, AE0..."
+              class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors"/>
+          </div>
+          <div class="w-32">
+            <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Description</label>
+            <input type="text" id="lacp-desc-input" placeholder="optionnel"
+              class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors"/>
+          </div>
+        </div>
+
+        <!-- Couleur de l'agrégat -->
+        <div>
+          <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Couleur du lien</label>
+          <div class="flex gap-2 flex-wrap" id="lacp-color-palette">
+            <!-- Générée par JS -->
+          </div>
+        </div>
+
+        <!-- Sélection des ports -->
+        <div>
+          <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+            Ports à agréger
+            <span id="lacp-port-count" class="ml-1 text-orange-500 font-semibold"></span>
+          </label>
+          <!-- Mini switch pour sélectionner les ports -->
+          <div id="lacp-port-grid" class="bg-gray-900 rounded-xl p-3 overflow-x-auto">
+            <!-- Rempli par JS -->
+          </div>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+            Cliquez sur les ports à inclure dans l'agrégat.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button onclick="closeModal('modal-add-lacp')"
+          class="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium py-2.5 rounded-xl transition-colors">
+          Annuler
+        </button>
+        <button onclick="saveLacp()"
+          class="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium py-2.5 rounded-xl transition-colors shadow-md">
+          Créer l'agrégat
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       NOTIFICATION TOAST (coin bas droite)
+  ============================================================ -->
+  <div id="toast"
+    class="fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-700 text-white text-sm font-medium px-5 py-3 rounded-xl shadow-2xl z-[9999] opacity-0 translate-y-4 transition-all duration-300 pointer-events-none flex items-center gap-3 border border-gray-700 dark:border-gray-600">
+    <div id="toast-icon"></div>
+    <span id="toast-text"></span>
+  </div>
+
+
+  <!-- ============================================================
+       JAVASCRIPT PRINCIPAL
+  ============================================================ -->
+  <script>
+    // ===========================================================
+    // ÉTAT GLOBAL DE L'APPLICATION
+    // Toutes les données sont stockées ici
+    // ===========================================================
+
+    // Liste des VLANs créés par l'utilisateur
+    // Format : { id: 10, name: "LAN Users", description: "...", color: "#3b82f6" }
+    let vlans = [];
+
+    // Assignation des ports — supporte plusieurs VLANs par port (trunk)
+    // Format : { portIndex: [vlanId1, vlanId2, ...], ... }
+    // Un seul VLAN = port "access", plusieurs VLANs = port "trunk"
+    let portAssignments = {};
+
+    // Description libre de chaque port
+    // Format : { portIndex: "texte descriptif", ... }
+    let portDescriptions = {};
+
+    // Modèle de switch actuel (nombre de ports)
+    let currentModel = 24;
+
+    // Port en cours d'édition (lors de l'ouverture du modal d'assignation)
+    let editingPortIndex = null;
+
+    // Couleur sélectionnée dans le modal de création de VLAN
+    let selectedColor = '#3b82f6';
+
+    // Agrégats LACP
+    // Format : [{ id: 1, name: "Po1", description: "...", ports: [0, 2], color: "#f97316" }]
+    let lacpAggregates = [];
+
+    // Couleur sélectionnée dans le modal LACP
+    let lacpSelectedColor = '#f97316';
+
+    // Ports sélectionnés dans le modal LACP (liste d'indices)
+    let lacpSelectedPorts = [];
+
+    // ID de l'agrégat LACP en cours d'édition (null = création)
+    let editingLacpId = null;
+
+    // Palette de couleurs LACP (distincte de celle des VLANs pour éviter la confusion)
+    const LACP_COLORS = [
+      '#f97316', '#f59e0b', '#10b981', '#06b6d4',
+      '#6366f1', '#a855f7', '#ec4899', '#14b8a6',
+    ];
+
+    // ===========================================================
+    // PALETTE DE COULEURS PRÉDÉFINIES
+    // Couleurs professionnelles et facilement distinguables
+    // ===========================================================
+    const PRESET_COLORS = [
+      '#ef4444', // rouge
+      '#f97316', // orange
+      '#eab308', // jaune
+      '#22c55e', // vert
+      '#14b8a6', // teal
+      '#3b82f6', // bleu
+      '#8b5cf6', // violet
+      '#ec4899', // rose
+      '#6366f1', // indigo
+      '#84cc16', // lime
+      '#06b6d4', // cyan
+      '#f43f5e', // rose vif
+      '#a78bfa', // lavande
+      '#34d399', // emeraude
+      '#fb923c', // orange clair
+      '#60a5fa', // bleu clair
+    ];
+
+    // ===========================================================
+    // CONFIGURATION DES MODÈLES DE SWITCH
+    // Définit la disposition des ports pour chaque modèle
+    // ===========================================================
+
+    /**
+     * Retourne la configuration d'un modèle de switch
+     * @param {number} totalPorts - Nombre total de ports
+     * @returns {object} Configuration avec rangées de ports
+     */
+    function getSwitchConfig(totalPorts) {
+      // Configuration selon le nombre de ports
+      const configs = {
+        8:  { rows: 1, portsPerRow: 8,  sfpPorts: 0 },
+        16: { rows: 2, portsPerRow: 8,  sfpPorts: 0 },
+        24: { rows: 2, portsPerRow: 12, sfpPorts: 0 },
+        28: { rows: 2, portsPerRow: 12, sfpPorts: 4 },
+        48: { rows: 2, portsPerRow: 24, sfpPorts: 0 },
+        52: { rows: 2, portsPerRow: 24, sfpPorts: 4 },
+      };
+      return configs[totalPorts] || configs[24];
+    }
+
+    // ===========================================================
+    // RENDU DU SWITCH
+    // Dessine le châssis et les ports dans le DOM
+    // ===========================================================
+
+    /**
+     * Calcule le style de fond d'un port selon les VLANs assignés.
+     * - 0 VLAN  → fond gris (non assigné)
+     * - 1 VLAN  → fond plein de la couleur du VLAN
+     * - N VLANs → bandes verticales de chaque couleur (mode trunk)
+     */
+    function getPortStyle(vlanIds) {
+      // Récupère les objets VLAN correspondants (ignore les IDs introuvables)
+      const assignedVlans = vlanIds.map(id => vlans.find(v => v.id === id)).filter(Boolean);
+
+      if (assignedVlans.length === 0) return '';
+
+      if (assignedVlans.length === 1) {
+        const c = assignedVlans[0].color;
+        return `style="background: linear-gradient(180deg, ${c}dd 0%, ${c}aa 100%); border-color: ${c}88;"`;
+      }
+
+      // Plusieurs VLANs : bandes verticales
+      const pct = 100 / assignedVlans.length;
+      const stops = assignedVlans.flatMap((v, i) => [
+        `${v.color} ${i * pct}%`,
+        `${v.color} ${(i + 1) * pct}%`
+      ]).join(', ');
+      const firstColor = assignedVlans[0].color;
+      return `style="background: linear-gradient(90deg, ${stops}); border-color: ${firstColor}88;"`;
+    }
+
+    /**
+     * Construit le texte du tooltip pour un port
+     */
+    function getPortTooltip(portLabel, vlanIds, description) {
+      const assignedVlans = vlanIds.map(id => vlans.find(v => v.id === id)).filter(Boolean);
+      let text = portLabel;
+      if (assignedVlans.length === 1) {
+        text += ` — VLAN ${assignedVlans[0].id} : ${assignedVlans[0].name}`;
+      } else if (assignedVlans.length > 1) {
+        text += ` — TRUNK : ${assignedVlans.map(v => `VLAN${v.id}`).join(', ')}`;
+      }
+      if (description) text += ` — ${description}`;
+      return text;
+    }
+
+    /**
+     * Construit et affiche le switch dans l'interface
+     */
+    function renderSwitch() {
+      const container = document.getElementById('switch-chassis-container');
+      const config = getSwitchConfig(currentModel);
+      const totalEthernetPorts = currentModel - config.sfpPorts;
+
+      // Classe "large" pour les switchs 48/52 ports (ports plus compacts)
+      const largeClass = (currentModel >= 48) ? 'chassis-large' : '';
+
+      // Met à jour le titre
+      document.getElementById('switch-title').textContent =
+        `Switch ${currentModel} ports${config.sfpPorts > 0 ? ` (${totalEthernetPorts} RJ45 + ${config.sfpPorts} SFP)` : ''}`;
+
+      // Construction du HTML du châssis
+      let portsHTML = `<div class="ports-grid ${largeClass}">`;
+
+      // Calcule les ports de chaque rangée
+      // Les ports sont numérotés de haut en bas, puis gauche à droite
+      // Ex pour 24 ports : rangée 1 = ports 1,3,5,...23 / rangée 2 = ports 2,4,6,...24
+      for (let row = 0; row < config.rows; row++) {
+        portsHTML += '<div class="ports-row">';
+
+        for (let col = 0; col < config.portsPerRow; col++) {
+          // Calcul du numéro de port (numérotation verticale classique des switchs)
+          let portNum;
+          if (config.rows === 2) {
+            portNum = col * 2 + row + 1;
+          } else {
+            portNum = col + 1;
+          }
+
+          const portIndex = portNum - 1;
+          // portAssignments stocke maintenant un tableau de vlanIds
+          const vlanIds = portAssignments[portIndex] || [];
+          const isTrunk = vlanIds.length > 1;
+          const isAssigned = vlanIds.length > 0;
+          const description = portDescriptions[portIndex] || '';
+
+          const tooltipText = getPortTooltip(`Port ${portNum}`, vlanIds, description);
+          const colorStyle = getPortStyle(vlanIds);
+
+          // Badge LACP sur le port (si appartient à un agrégat)
+          const portAgg = lacpAggregates.find(a => a.ports.includes(portIndex));
+          const lacpBadgeHTML = portAgg
+            ? `<span class="port-lacp-badge" style="background:${portAgg.color}cc;">${portAgg.name}</span>`
+            : '';
+
+          portsHTML += `
+            <div class="port ${isAssigned ? 'assigned' : 'unassigned'}"
+              ${colorStyle}
+              onclick="openAssignModal(${portIndex})"
+              title="">
+              ${isTrunk ? '<span class="port-trunk-badge">TRUNK</span>' : '<div class="port-led"></div>'}
+              <div class="port-connector"></div>
+              <span class="port-number">${portNum}</span>
+              ${lacpBadgeHTML}
+              <div class="port-tooltip">${tooltipText}</div>
+            </div>`;
+        }
+
+        // Séparateur + ports SFP si nécessaire (uniquement sur la dernière rangée)
+        if (row === config.rows - 1 && config.sfpPorts > 0) {
+          portsHTML += '<div class="sfp-separator"></div>';
+
+          for (let s = 0; s < config.sfpPorts; s++) {
+            const portIndex = totalEthernetPorts + s;
+            const vlanIds = portAssignments[portIndex] || [];
+            const isTrunk = vlanIds.length > 1;
+            const isAssigned = vlanIds.length > 0;
+            const description = portDescriptions[portIndex] || '';
+
+            const tooltipText = getPortTooltip(`SFP ${s + 1}`, vlanIds, description);
+            const colorStyle = getPortStyle(vlanIds);
+
+            const sfpAgg = lacpAggregates.find(a => a.ports.includes(portIndex));
+            const sfpLacpBadge = sfpAgg
+              ? `<span class="port-lacp-badge" style="background:${sfpAgg.color}cc;">${sfpAgg.name}</span>`
+              : '';
+
+            portsHTML += `
+              <div class="port sfp ${isAssigned ? 'assigned' : ''}"
+                ${colorStyle}
+                onclick="openAssignModal(${portIndex})"
+                title="">
+                ${isTrunk ? '<span class="port-trunk-badge">TRUNK</span>' : '<div class="port-led"></div>'}
+                <div class="port-connector"></div>
+                <span class="port-number">SFP${s + 1}</span>
+                ${sfpLacpBadge}
+                <div class="port-tooltip">${tooltipText}</div>
+              </div>`;
+          }
+        }
+
+        portsHTML += '</div>'; // fin .ports-row
+      }
+
+      portsHTML += '</div>'; // fin .ports-grid
+
+      // Génère l'overlay LACP (barres colorées sous les ports)
+      const lacpOverlayHTML = buildLacpOverlay(config);
+
+      // HTML complet du châssis (rack-mount style)
+      container.innerHTML = `
+        <div class="rack-switch-wrapper ${largeClass}">
+          <div class="rack-ear rack-ear-left">
+            <div class="rack-screw"></div>
+            <div class="rack-screw"></div>
+          </div>
+          <div class="switch-chassis">
+            <div class="chassis-header">
+              <div class="status-led"></div>
+              <span class="text-xs font-bold text-gray-300 tracking-widest uppercase">
+                ${document.getElementById('plan-switch-name').value || 'SWITCH'}
+              </span>
+              <span class="text-xs text-gray-500 ml-auto">${currentModel}P</span>
+            </div>
+            <div class="port-panel">
+              ${portsHTML}
+              ${lacpOverlayHTML}
+            </div>
+            <div class="vent-lines">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="rack-ear rack-ear-right">
+            <div class="rack-screw"></div>
+            <div class="rack-screw"></div>
+          </div>
+        </div>`;
+
+      // Met à jour la légende et les stats après le rendu
+      renderLegend();
+      renderStats();
+    }
+
+    // ===========================================================
+    // LÉGENDE
+    // ===========================================================
+
+    /**
+     * Met à jour la légende des VLANs
+     */
+    function renderLegend() {
+      const grid = document.getElementById('legend-grid');
+      const empty = document.getElementById('legend-empty');
+
+      if (vlans.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+
+      // Compte combien de ports contiennent chaque VLAN
+      // (un port trunk peut compter pour plusieurs VLANs)
+      const vlanCounts = {};
+      Object.values(portAssignments).forEach(vlanIds => {
+        vlanIds.forEach(vlanId => {
+          vlanCounts[vlanId] = (vlanCounts[vlanId] || 0) + 1;
+        });
+      });
+
+      grid.innerHTML = vlans.map(vlan => `
+        <div class="flex items-start gap-3 p-3 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 group">
+          <!-- Pastille de couleur -->
+          <div class="w-5 h-5 rounded-md flex-shrink-0 mt-0.5 shadow-sm border border-white/20"
+            style="background-color: ${vlan.color};"></div>
+          <!-- Informations -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs font-bold text-gray-500 dark:text-gray-400">VLAN ${vlan.id}</span>
+              <span class="text-xs text-gray-700 dark:text-gray-200 font-medium truncate">${vlan.name}</span>
+            </div>
+            ${vlan.description ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">${vlan.description}</p>` : ''}
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+              ${vlanCounts[vlan.id] || 0} port${(vlanCounts[vlan.id] || 0) > 1 ? 's' : ''}
+            </p>
+          </div>
+          <!-- Bouton supprimer -->
+          <button onclick="deleteVlan(${vlan.id})"
+            class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 ml-auto flex-shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>`).join('');
+    }
+
+    // ===========================================================
+    // STATISTIQUES
+    // ===========================================================
+
+    /**
+     * Met à jour le résumé d'utilisation des ports
+     */
+    function renderStats() {
+      const grid = document.getElementById('stats-grid');
+      const totalPorts = currentModel;
+      // Un port est "configuré" s'il a au moins un VLAN assigné
+      const assignedCount = Object.values(portAssignments).filter(ids => ids.length > 0).length;
+      const trunkCount = Object.values(portAssignments).filter(ids => ids.length > 1).length;
+      const freeCount = totalPorts - assignedCount;
+      const vlanCount = vlans.length;
+
+      grid.innerHTML = `
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+          <p class="text-2xl font-bold text-gray-800 dark:text-gray-100">${totalPorts}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ports total</p>
+        </div>
+        <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800">
+          <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">${assignedCount}</p>
+          <p class="text-xs text-blue-500 dark:text-blue-400 mt-1">Ports configurés</p>
+        </div>
+        <div class="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-100 dark:border-green-800">
+          <p class="text-2xl font-bold text-green-600 dark:text-green-400">${freeCount}</p>
+          <p class="text-xs text-green-500 dark:text-green-400 mt-1">Ports disponibles</p>
+        </div>
+        <div class="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
+          <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">${vlanCount}</p>
+          <p class="text-xs text-purple-500 dark:text-purple-400 mt-1">VLANs définis</p>
+        </div>
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 border border-orange-100 dark:border-orange-800 col-span-2 md:col-span-1">
+          <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">${trunkCount}</p>
+          <p class="text-xs text-orange-500 dark:text-orange-400 mt-1">Ports trunk</p>
+        </div>`;
+    }
+
+    // ===========================================================
+    // LISTE DES VLANS (SIDEBAR)
+    // ===========================================================
+
+    /**
+     * Met à jour la liste des VLANs dans la sidebar
+     */
+    function renderVlanList() {
+      const list = document.getElementById('vlan-list');
+      const empty = document.getElementById('vlan-empty');
+
+      if (vlans.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+      } else {
+        empty.classList.add('hidden');
+        list.innerHTML = vlans.map(vlan => `
+          <div class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 group fade-in">
+            <div class="w-4 h-4 rounded flex-shrink-0 shadow-sm" style="background-color: ${vlan.color};"></div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">VLAN ${vlan.id}</span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">${vlan.name}</span>
+              </div>
+              ${vlan.description ? `<p class="text-xs text-gray-400 dark:text-gray-500 truncate">${vlan.description}</p>` : ''}
+            </div>
+            <button onclick="deleteVlan(${vlan.id})"
+              class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </div>`).join('');
+      }
+    }
+
+    // ===========================================================
+    // GESTION DES VLANS
+    // ===========================================================
+
+    /**
+     * Ouvre le modal de création d'un nouveau VLAN
+     */
+    function openAddVlanModal() {
+      // Pré-remplit avec le prochain ID disponible
+      const nextId = vlans.length > 0 ? Math.max(...vlans.map(v => v.id)) + 10 : 10;
+      document.getElementById('vlan-id-input').value = nextId;
+      document.getElementById('vlan-name-input').value = '';
+      document.getElementById('vlan-desc-input').value = '';
+
+      // Sélectionne une couleur non utilisée
+      const usedColors = vlans.map(v => v.color);
+      const availableColor = PRESET_COLORS.find(c => !usedColors.includes(c)) || PRESET_COLORS[0];
+      selectColor(availableColor);
+
+      openModal('modal-add-vlan');
+
+      // Focus sur le champ nom après ouverture
+      setTimeout(() => document.getElementById('vlan-name-input').focus(), 200);
+    }
+
+    /**
+     * Valide et enregistre le nouveau VLAN
+     */
+    function saveVlan() {
+      const id = parseInt(document.getElementById('vlan-id-input').value);
+      const name = document.getElementById('vlan-name-input').value.trim();
+      const description = document.getElementById('vlan-desc-input').value.trim();
+      const color = document.getElementById('vlan-color-custom').value;
+
+      // Validations
+      if (!id || id < 1 || id > 4094) {
+        showToast('⚠️ Le numéro VLAN doit être entre 1 et 4094', 'warning');
+        return;
+      }
+      if (!name) {
+        showToast('⚠️ Le nom du VLAN est obligatoire', 'warning');
+        document.getElementById('vlan-name-input').focus();
+        return;
+      }
+      if (vlans.find(v => v.id === id)) {
+        showToast(`⚠️ Le VLAN ${id} existe déjà`, 'warning');
+        return;
+      }
+
+      // Ajout du VLAN
+      vlans.push({ id, name, description, color });
+      vlans.sort((a, b) => a.id - b.id); // Tri par ID croissant
+
+      closeModal('modal-add-vlan');
+      renderVlanList();
+      renderSwitch(); // Re-render pour mettre à jour la légende
+
+      showToast(`✓ VLAN ${id} "${name}" créé`, 'success');
+    }
+
+    /**
+     * Supprime un VLAN et retire son ID de tous les ports assignés.
+     * Un port trunk perd seulement ce VLAN (les autres restent).
+     */
+    function deleteVlan(vlanId) {
+      const vlan = vlans.find(v => v.id === vlanId);
+      if (!vlan) return;
+
+      let affectedPorts = 0;
+      Object.keys(portAssignments).forEach(portIndex => {
+        const ids = portAssignments[portIndex];
+        if (ids.includes(vlanId)) {
+          affectedPorts++;
+          // Retire ce VLAN du tableau
+          const newIds = ids.filter(id => id !== vlanId);
+          if (newIds.length === 0) {
+            // Plus aucun VLAN : libère le port
+            delete portAssignments[portIndex];
+          } else {
+            portAssignments[portIndex] = newIds;
+          }
+        }
+      });
+
+      // Supprime le VLAN de la liste
+      vlans = vlans.filter(v => v.id !== vlanId);
+
+      renderVlanList();
+      renderSwitch();
+
+      const msg = affectedPorts > 0
+        ? `VLAN ${vlanId} supprimé (retiré de ${affectedPorts} port${affectedPorts > 1 ? 's' : ''})`
+        : `VLAN ${vlanId} supprimé`;
+      showToast(msg, 'info');
+    }
+
+    // ===========================================================
+    // GESTION DES PORTS
+    // ===========================================================
+
+    /**
+     * Ouvre le modal d'assignation VLAN pour un port donné.
+     * L'utilisateur peut cocher un ou plusieurs VLANs (trunk).
+     */
+    function openAssignModal(portIndex) {
+      editingPortIndex = portIndex;
+
+      const config = getSwitchConfig(currentModel);
+      const totalEthernetPorts = currentModel - config.sfpPorts;
+      const isSFP = portIndex >= totalEthernetPorts;
+      const displayNum = isSFP
+        ? `SFP ${portIndex - totalEthernetPorts + 1}`
+        : `Port ${portIndex + 1}`;
+
+      document.getElementById('assign-modal-title').textContent = displayNum;
+      document.getElementById('port-desc-input').value = portDescriptions[portIndex] || '';
+
+      // VLANs déjà assignés à ce port (tableau, peut être vide)
+      const currentVlanIds = portAssignments[portIndex] || [];
+
+      // Sous-titre : affiche les VLANs actuels
+      let subtitle = 'Aucun VLAN assigné';
+      if (currentVlanIds.length === 1) {
+        const v = vlans.find(v => v.id === currentVlanIds[0]);
+        subtitle = v ? `VLAN actuel : ${v.id} (${v.name})` : 'VLAN actuel : —';
+      } else if (currentVlanIds.length > 1) {
+        subtitle = `Trunk : ${currentVlanIds.map(id => 'VLAN ' + id).join(', ')}`;
+      }
+      document.getElementById('assign-modal-subtitle').textContent = subtitle;
+
+      // Construit la liste des VLANs avec des cases à cocher
+      const listEl = document.getElementById('assign-vlan-list');
+
+      if (vlans.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-6 text-gray-400 text-sm">
+            <p>Aucun VLAN disponible.</p>
+            <button onclick="closeModal('modal-assign-vlan'); openAddVlanModal();"
+              class="mt-2 text-blue-500 hover:underline text-xs">
+              Créer un VLAN
+            </button>
+          </div>`;
+      } else {
+        listEl.innerHTML = vlans.map(vlan => {
+          const isChecked = currentVlanIds.includes(vlan.id);
+          return `
+            <label class="w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all
+              ${isChecked
+                ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600 bg-white dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20'}">
+              <!-- Case à cocher cachée (on utilise le label pour cliquer) -->
+              <input type="checkbox"
+                class="vlan-checkbox w-4 h-4 rounded accent-blue-600 cursor-pointer flex-shrink-0"
+                data-vlan-id="${vlan.id}"
+                ${isChecked ? 'checked' : ''}
+                onchange="updateCheckboxStyle(this)" />
+              <div class="w-4 h-4 rounded flex-shrink-0 shadow-sm" style="background-color: ${vlan.color};"></div>
+              <div class="flex-1 min-w-0">
+                <span class="text-xs font-bold text-gray-500 dark:text-gray-400">VLAN ${vlan.id}</span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-200 ml-2">${vlan.name}</span>
+                ${vlan.description ? `<p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">${vlan.description}</p>` : ''}
+              </div>
+            </label>`;
+        }).join('');
+      }
+
+      openModal('modal-assign-vlan');
+    }
+
+    /**
+     * Met à jour le style visuel d'une ligne VLAN quand la case est cochée/décochée
+     */
+    function updateCheckboxStyle(checkbox) {
+      const label = checkbox.closest('label');
+      if (checkbox.checked) {
+        label.classList.add('border-blue-400', 'dark:border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/30');
+        label.classList.remove('border-gray-200', 'dark:border-gray-600', 'bg-white', 'dark:bg-gray-700');
+      } else {
+        label.classList.remove('border-blue-400', 'dark:border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/30');
+        label.classList.add('border-gray-200', 'dark:border-gray-600', 'bg-white', 'dark:bg-gray-700');
+      }
+    }
+
+    /**
+     * Enregistre les VLANs cochés pour le port en cours d'édition.
+     * Si plusieurs VLANs sont cochés → port trunk.
+     */
+    function savePortVlans() {
+      if (editingPortIndex === null) return;
+
+      // Sauvegarde la description du port
+      const desc = document.getElementById('port-desc-input').value.trim();
+      if (desc) {
+        portDescriptions[editingPortIndex] = desc;
+      } else {
+        delete portDescriptions[editingPortIndex];
+      }
+
+      // Récupère tous les IDs de VLANs cochés
+      const checked = document.querySelectorAll('.vlan-checkbox:checked');
+      const selectedIds = Array.from(checked).map(cb => parseInt(cb.dataset.vlanId));
+
+      if (selectedIds.length === 0) {
+        // Aucun VLAN coché : on libère le port
+        delete portAssignments[editingPortIndex];
+        closeModal('modal-assign-vlan');
+        renderSwitch();
+        showToast(`Port ${editingPortIndex + 1} libéré`, 'info');
+      } else {
+        portAssignments[editingPortIndex] = selectedIds;
+        closeModal('modal-assign-vlan');
+        renderSwitch();
+
+        if (selectedIds.length === 1) {
+          const vlan = vlans.find(v => v.id === selectedIds[0]);
+          showToast(`✓ Port ${editingPortIndex + 1} → VLAN ${selectedIds[0]} (${vlan?.name})`, 'success');
+        } else {
+          showToast(`✓ Port ${editingPortIndex + 1} → TRUNK (${selectedIds.length} VLANs)`, 'success');
+        }
+      }
+
+      editingPortIndex = null;
+    }
+
+    /**
+     * Retire tous les VLANs du port en cours d'édition
+     */
+    function clearPort() {
+      if (editingPortIndex === null) return;
+
+      // Sauvegarde quand même la description
+      const desc = document.getElementById('port-desc-input').value.trim();
+      if (desc) {
+        portDescriptions[editingPortIndex] = desc;
+      } else {
+        delete portDescriptions[editingPortIndex];
+      }
+
+      delete portAssignments[editingPortIndex];
+
+      closeModal('modal-assign-vlan');
+      renderSwitch();
+      showToast(`Port ${editingPortIndex + 1} libéré`, 'info');
+      editingPortIndex = null;
+    }
+
+    // ===========================================================
+    // OVERLAY LACP — calcul et rendu des barres sous les ports
+    // ===========================================================
+
+    /**
+     * Calcule la colonne d'un port dans la grille du switch.
+     * Pour un switch 2 rangées : column = floor(portIndex / 2).
+     * Pour un switch 1 rangée  : column = portIndex.
+     */
+    function portToColumn(portIndex, numRows) {
+      return numRows === 2 ? Math.floor(portIndex / 2) : portIndex;
+    }
+
+    /**
+     * Génère le HTML de l'overlay LACP (barres colorées sous la grille de ports).
+     * Chaque agrégat = une barre colorée couvrant les colonnes concernées.
+     */
+    function buildLacpOverlay(config) {
+      if (lacpAggregates.length === 0) return '';
+
+      const portWidth = (currentModel >= 48) ? 31 : 42;
+      const portGap   = (currentModel >= 48) ? 3  : 5;
+      const totalEthernetPorts = currentModel - config.sfpPorts;
+
+      let html = '';
+
+      lacpAggregates.forEach(agg => {
+        // Sépare les ports ethernet des ports SFP
+        const ethernetPorts = agg.ports.filter(p => p < totalEthernetPorts);
+        const sfpPorts      = agg.ports.filter(p => p >= totalEthernetPorts);
+
+        // ── Barre pour les ports Ethernet ──────────────────────
+        if (ethernetPorts.length > 0) {
+          const cols  = ethernetPorts.map(p => portToColumn(p, config.rows));
+          const minC  = Math.min(...cols);
+          const maxC  = Math.max(...cols);
+          const left  = minC * (portWidth + portGap);
+          const width = (maxC - minC) * (portWidth + portGap) + portWidth;
+
+          html += `
+            <div class="lacp-overlay-row">
+              <div class="lacp-bracket"
+                style="left:${left}px; width:${width}px; background:${agg.color}55; border: 1.5px solid ${agg.color};">
+                <span class="lacp-bracket-label">${agg.name}</span>
+                ${agg.description ? `<span class="lacp-bracket-desc">${agg.description}</span>` : ''}
+              </div>
+            </div>`;
+        }
+
+        // ── Barre pour les ports SFP ────────────────────────────
+        // Les SFP sont décalés par un séparateur de 12px (5px pour les grands châssis)
+        if (sfpPorts.length > 0 && config.sfpPorts > 0) {
+          const separatorWidth = (currentModel >= 48) ? 15 : 17;
+          const sfpOffset = config.portsPerRow * (portWidth + portGap) + separatorWidth;
+          const sfpCols   = sfpPorts.map(p => p - totalEthernetPorts);
+          const minSfp    = Math.min(...sfpCols);
+          const maxSfp    = Math.max(...sfpCols);
+          const left  = sfpOffset + minSfp * (portWidth + portGap);
+          const width = (maxSfp - minSfp) * (portWidth + portGap) + portWidth;
+
+          html += `
+            <div class="lacp-overlay-row">
+              <div class="lacp-bracket"
+                style="left:${left}px; width:${width}px; background:${agg.color}55; border: 1.5px solid ${agg.color};">
+                <span class="lacp-bracket-label">${agg.name} SFP</span>
+              </div>
+            </div>`;
+        }
+      });
+
+      return html;
+    }
+
+    // ===========================================================
+    // GESTION DES AGRÉGATS LACP
+    // ===========================================================
+
+    /**
+     * Met à jour la liste des agrégats LACP dans la sidebar
+     */
+    function renderLacpList() {
+      const list  = document.getElementById('lacp-list');
+      const empty = document.getElementById('lacp-empty');
+
+      if (lacpAggregates.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      empty.classList.add('hidden');
+      list.innerHTML = lacpAggregates.map(agg => `
+        <div class="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 group fade-in">
+          <!-- Indicateur de couleur -->
+          <div class="w-4 h-4 rounded flex-shrink-0 shadow-sm" style="background:${agg.color};"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-bold text-gray-700 dark:text-gray-200">${agg.name}</span>
+              <span class="text-xs text-gray-400 dark:text-gray-500">${agg.ports.length} port${agg.ports.length > 1 ? 's' : ''}</span>
+            </div>
+            ${agg.description ? `<p class="text-xs text-gray-400 dark:text-gray-500 truncate">${agg.description}</p>` : ''}
+          </div>
+          <!-- Bouton supprimer -->
+          <button onclick="deleteLacp(${agg.id})"
+            class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        </div>`).join('');
+    }
+
+    /**
+     * Ouvre le modal de création d'un agrégat LACP.
+     * Construit un mini-switch interactif pour sélectionner les ports.
+     */
+    function openAddLacpModal() {
+      editingLacpId = null;
+      lacpSelectedPorts = [];
+
+      // Nom par défaut
+      const nextId = lacpAggregates.length + 1;
+      document.getElementById('lacp-name-input').value = `Po${nextId}`;
+      document.getElementById('lacp-desc-input').value = '';
+
+      // Couleur par défaut (première non utilisée)
+      const usedColors = lacpAggregates.map(a => a.color);
+      lacpSelectedColor = LACP_COLORS.find(c => !usedColors.includes(c)) || LACP_COLORS[0];
+
+      // Construit la palette de couleurs
+      const palette = document.getElementById('lacp-color-palette');
+      palette.innerHTML = LACP_COLORS.map(color => `
+        <button type="button"
+          class="lacp-palette-btn w-7 h-7 rounded-lg transition-all hover:scale-110 border-2 shadow-md"
+          style="background:${color}; border-color:${color === lacpSelectedColor ? 'white' : 'transparent'};"
+          onclick="selectLacpColor('${color}')">
+        </button>`).join('');
+
+      // Construit la mini-grille de ports
+      buildLacpPortGrid();
+      updateLacpPortCount();
+
+      openModal('modal-add-lacp');
+      setTimeout(() => document.getElementById('lacp-name-input').focus(), 200);
+    }
+
+    /**
+     * Construit la grille de ports dans le modal LACP.
+     * Les ports sélectionnés sont colorés avec lacpSelectedColor.
+     */
+    function buildLacpPortGrid() {
+      const config = getSwitchConfig(currentModel);
+      const totalEthernetPorts = currentModel - config.sfpPorts;
+      const portW = (currentModel >= 48) ? 26 : 34;
+      const portH = (currentModel >= 48) ? 22 : 28;
+
+      let html = '<div style="display:flex;flex-direction:column;gap:4px;">';
+
+      for (let row = 0; row < config.rows; row++) {
+        html += '<div style="display:flex;gap:3px;flex-wrap:nowrap;">';
+        for (let col = 0; col < config.portsPerRow; col++) {
+          const portNum   = config.rows === 2 ? col * 2 + row + 1 : col + 1;
+          const portIndex = portNum - 1;
+          const isSel     = lacpSelectedPorts.includes(portIndex);
+          const bg        = isSel ? lacpSelectedColor : '#374151';
+          const border    = isSel ? 'rgba(255,255,255,0.4)' : '#1f2937';
+          html += `<button type="button"
+            class="lacp-port-btn ${isSel ? 'selected' : 'idle'}"
+            style="width:${portW}px;height:${portH}px;${isSel ? `background:${bg};border-color:${border};` : ''}"
+            onclick="toggleLacpPort(${portIndex})">${portNum}</button>`;
+        }
+
+        // SFP si applicable (sur la dernière rangée)
+        if (row === config.rows - 1 && config.sfpPorts > 0) {
+          html += '<div style="width:8px;"></div>';
+          for (let s = 0; s < config.sfpPorts; s++) {
+            const portIndex = totalEthernetPorts + s;
+            const isSel     = lacpSelectedPorts.includes(portIndex);
+            const bg        = isSel ? lacpSelectedColor : '#3b2559';
+            html += `<button type="button"
+              class="lacp-port-btn ${isSel ? 'selected' : 'idle'}"
+              style="width:${portW + 4}px;height:${portH}px;font-size:7px;${isSel ? `background:${bg};border-color:rgba(255,255,255,0.4);` : 'background:#3b2559;color:#a78bfa;border-color:#1e1535;'}"
+              onclick="toggleLacpPort(${portIndex})">SFP${s + 1}</button>`;
+          }
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
+      document.getElementById('lacp-port-grid').innerHTML = html;
+    }
+
+    /**
+     * Bascule la sélection d'un port dans le modal LACP
+     */
+    function toggleLacpPort(portIndex) {
+      const idx = lacpSelectedPorts.indexOf(portIndex);
+      if (idx === -1) {
+        lacpSelectedPorts.push(portIndex);
+      } else {
+        lacpSelectedPorts.splice(idx, 1);
+      }
+      buildLacpPortGrid();     // Re-rend la grille avec la nouvelle sélection
+      updateLacpPortCount();
+    }
+
+    /**
+     * Met à jour le compteur de ports sélectionnés dans le modal LACP
+     */
+    function updateLacpPortCount() {
+      const el = document.getElementById('lacp-port-count');
+      const n  = lacpSelectedPorts.length;
+      el.textContent = n > 0 ? `(${n} sélectionné${n > 1 ? 's' : ''})` : '';
+    }
+
+    /**
+     * Sélectionne une couleur dans la palette du modal LACP
+     */
+    function selectLacpColor(color) {
+      lacpSelectedColor = color;
+      document.querySelectorAll('.lacp-palette-btn').forEach(btn => {
+        const btnColor = btn.style.backgroundColor;
+        // Compare en convertissant la couleur sélectionnée
+        btn.style.borderColor = (btn.onclick.toString().includes(color)) ? 'white' : 'transparent';
+      });
+      // Force le re-render des boutons de port avec la nouvelle couleur
+      buildLacpPortGrid();
+    }
+
+    /**
+     * Enregistre le nouvel agrégat LACP
+     */
+    function saveLacp() {
+      const name = document.getElementById('lacp-name-input').value.trim();
+      const desc = document.getElementById('lacp-desc-input').value.trim();
+
+      if (!name) {
+        showToast('⚠️ Donnez un nom à l\'agrégat (ex: Po1)', 'warning');
+        document.getElementById('lacp-name-input').focus();
+        return;
+      }
+      if (lacpSelectedPorts.length < 2) {
+        showToast('⚠️ Sélectionnez au moins 2 ports', 'warning');
+        return;
+      }
+
+      // Vérifie qu'aucun port n'est déjà dans un autre agrégat
+      const conflicts = lacpSelectedPorts.filter(p =>
+        lacpAggregates.some(a => a.id !== editingLacpId && a.ports.includes(p))
+      );
+      if (conflicts.length > 0) {
+        showToast(`⚠️ Port(s) déjà dans un agrégat : ${conflicts.map(p => p + 1).join(', ')}`, 'warning');
+        return;
+      }
+
+      const newId = lacpAggregates.length > 0
+        ? Math.max(...lacpAggregates.map(a => a.id)) + 1
+        : 1;
+
+      lacpAggregates.push({
+        id: newId,
+        name,
+        description: desc,
+        ports: [...lacpSelectedPorts].sort((a, b) => a - b),
+        color: lacpSelectedColor,
+      });
+
+      closeModal('modal-add-lacp');
+      renderLacpList();
+      renderSwitch();
+      showToast(`✓ Agrégat "${name}" créé (${lacpSelectedPorts.length} ports)`, 'success');
+    }
+
+    /**
+     * Supprime un agrégat LACP
+     */
+    function deleteLacp(id) {
+      const agg = lacpAggregates.find(a => a.id === id);
+      if (!agg) return;
+      lacpAggregates = lacpAggregates.filter(a => a.id !== id);
+      renderLacpList();
+      renderSwitch();
+      showToast(`Agrégat "${agg.name}" supprimé`, 'info');
+    }
+
+    /**
+     * Remet tous les ports à zéro
+     */
+    function resetAllPorts() {
+      if (Object.keys(portAssignments).length === 0 && Object.keys(portDescriptions).length === 0) {
+        showToast('Aucun port à effacer', 'info');
+        return;
+      }
+
+      portAssignments = {};
+      portDescriptions = {};
+      renderSwitch();
+      showToast('Tous les ports ont été réinitialisés', 'info');
+    }
+
+    // ===========================================================
+    // SÉLECTEUR DE COULEUR
+    // ===========================================================
+
+    /**
+     * Sélectionne une couleur dans la palette
+     */
+    function selectColor(color) {
+      selectedColor = color;
+      document.getElementById('vlan-color-custom').value = color;
+      document.getElementById('color-preview-dot').style.backgroundColor = color;
+      document.getElementById('color-preview-text').textContent = color.toUpperCase();
+
+      // Met à jour les états des boutons de la palette
+      document.querySelectorAll('.palette-btn').forEach(btn => {
+        btn.classList.toggle('ring-2', btn.dataset.color === color);
+        btn.classList.toggle('ring-offset-2', btn.dataset.color === color);
+        btn.classList.toggle('ring-gray-400', btn.dataset.color === color);
+        btn.classList.toggle('scale-110', btn.dataset.color === color);
+      });
+    }
+
+    /**
+     * Construit la palette de couleurs dans le modal
+     */
+    function buildColorPalette() {
+      const palette = document.getElementById('color-palette');
+      palette.innerHTML = PRESET_COLORS.map(color => `
+        <button type="button"
+          class="palette-btn w-8 h-8 rounded-lg transition-all hover:scale-110 border-2 border-white/30 shadow-md"
+          data-color="${color}"
+          style="background-color: ${color};"
+          onclick="selectColor('${color}')">
+        </button>`).join('');
+
+      // Écoute les changements du sélecteur de couleur natif
+      document.getElementById('vlan-color-custom').addEventListener('input', (e) => {
+        selectColor(e.target.value);
+      });
+
+      // Sélection initiale
+      selectColor(PRESET_COLORS[5]); // bleu par défaut
+    }
+
+    // ===========================================================
+    // MODALS (ouverture / fermeture)
+    // ===========================================================
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    /**
+     * Ferme le modal si l'utilisateur clique sur l'overlay (fond flou)
+     * et non sur la boîte du modal
+     */
+    function closeModalIfOverlay(event, id) {
+      if (event.target === document.getElementById(id)) {
+        closeModal(id);
+      }
+    }
+
+    // Fermeture des modals avec la touche Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        ['modal-add-vlan', 'modal-assign-vlan', 'modal-add-lacp'].forEach(id => closeModal(id));
+      }
+    });
+
+    // ===========================================================
+    // MODE SOMBRE / CLAIR
+    // ===========================================================
+
+    /**
+     * Bascule entre le mode sombre et clair
+     */
+    function toggleDarkMode() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      localStorage.setItem('swplan-theme', isDark ? 'dark' : 'light');
+
+      // Mise à jour des icônes
+      document.getElementById('icon-sun').classList.toggle('hidden', !isDark);
+      document.getElementById('icon-moon').classList.toggle('hidden', isDark);
+
+      showToast(isDark ? 'Mode sombre activé' : 'Mode clair activé', 'info');
+    }
+
+    /**
+     * Applique le thème sauvegardé (ou le thème système par défaut)
+     */
+    function initTheme() {
+      const saved = localStorage.getItem('swplan-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const useDark = saved ? saved === 'dark' : prefersDark;
+
+      if (useDark) {
+        document.documentElement.classList.add('dark');
+        document.getElementById('icon-sun').classList.remove('hidden');
+        document.getElementById('icon-moon').classList.add('hidden');
+      }
+    }
+
+    // ===========================================================
+    // NOTIFICATIONS TOAST
+    // ===========================================================
+
+    let toastTimeout = null;
+
+    /**
+     * Affiche une notification temporaire
+     * @param {string} message - Message à afficher
+     * @param {string} type - 'success' | 'warning' | 'info' | 'error'
+     */
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const text = document.getElementById('toast-text');
+
+      // Icônes selon le type
+      const icons = {
+        success: '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>',
+        warning: '<svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+        info: '<svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        error: '<svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>',
+      };
+
+      icon.innerHTML = icons[type] || icons.info;
+      text.textContent = message;
+
+      // Affiche le toast
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+
+      // Cache après 3 secondes
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(16px)';
+      }, 3000);
+    }
+
+    // ===========================================================
+    // SAUVEGARDE / CHARGEMENT DE LA CONFIGURATION
+    // Format : fichier JSON avec extension .swplan
+    // ===========================================================
+
+    /**
+     * Sauvegarde toute la configuration dans un fichier .swplan (JSON).
+     * Le fichier est téléchargé directement dans le navigateur.
+     */
+    function saveConfig() {
+      // Rassemble toutes les données de l'application
+      const config = {
+        // Version du format — permet de gérer les futures évolutions
+        version: 1,
+
+        // Infos du plan (champs du formulaire)
+        planInfo: {
+          client:     document.getElementById('plan-client').value,
+          switchName: document.getElementById('plan-switch-name').value,
+          date:       document.getElementById('plan-date').value,
+          tech:       document.getElementById('plan-tech').value,
+        },
+
+        // Modèle de switch sélectionné
+        currentModel,
+
+        // Liste des VLANs
+        vlans,
+
+        // Assignation des ports (tableau de VLANs par port)
+        portAssignments,
+
+        // Descriptions des ports
+        portDescriptions,
+
+        // Agrégats LACP
+        lacpAggregates,
+      };
+
+      // Convertit en JSON lisible (indenté pour que le fichier soit humainement lisible)
+      const json = JSON.stringify(config, null, 2);
+
+      // Crée un blob et déclenche le téléchargement
+      const blob = new Blob([json], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      // Nom du fichier basé sur le nom du switch ou la date
+      const switchName = document.getElementById('plan-switch-name').value || 'switch';
+      link.download = `swplan-${switchName.replace(/\s+/g, '-').toLowerCase()}.swplan`;
+      link.href = url;
+      link.click();
+
+      // Libère l'URL temporaire après le téléchargement
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      showToast('✓ Configuration sauvegardée', 'success');
+    }
+
+    /**
+     * Charge une configuration depuis un fichier .swplan sélectionné par l'utilisateur.
+     * Remplace toute la configuration actuelle.
+     */
+    function loadConfig(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const config = JSON.parse(e.target.result);
+
+          // Vérifie que le fichier a la bonne structure (version 1)
+          if (!config.version || !config.vlans || !config.currentModel) {
+            showToast('⚠️ Fichier invalide ou incompatible', 'error');
+            return;
+          }
+
+          // ── Restaure le modèle de switch ──────────────────────
+          currentModel = config.currentModel;
+          document.getElementById('switch-model').value = currentModel;
+
+          // ── Restaure les infos du plan ─────────────────────────
+          if (config.planInfo) {
+            document.getElementById('plan-client').value     = config.planInfo.client     || '';
+            document.getElementById('plan-switch-name').value = config.planInfo.switchName || '';
+            document.getElementById('plan-date').value       = config.planInfo.date       || '';
+            document.getElementById('plan-tech').value       = config.planInfo.tech       || '';
+          }
+
+          // ── Restaure les VLANs ────────────────────────────────
+          vlans = config.vlans || [];
+
+          // ── Restaure les assignations de ports ─────────────────
+          // Assure la compatibilité : si l'ancien format stockait un seul ID (pas un tableau),
+          // on le convertit en tableau pour la version actuelle
+          portAssignments = {};
+          Object.entries(config.portAssignments || {}).forEach(([key, value]) => {
+            portAssignments[key] = Array.isArray(value) ? value : [value];
+          });
+
+          // ── Restaure les descriptions des ports ───────────────
+          portDescriptions = config.portDescriptions || {};
+
+          // ── Restaure les agrégats LACP ─────────────────────────
+          lacpAggregates = config.lacpAggregates || [];
+
+          // ── Met à jour toute l'interface ──────────────────────
+          renderVlanList();
+          renderLacpList();
+          renderSwitch();
+
+          showToast(`✓ Configuration "${file.name}" chargée`, 'success');
+
+        } catch (err) {
+          console.error('Erreur de chargement :', err);
+          showToast('⚠️ Impossible de lire le fichier', 'error');
+        }
+
+        // Réinitialise l'input fichier pour permettre de recharger le même fichier
+        event.target.value = '';
+      };
+
+      reader.readAsText(file);
+    }
+
+    // ===========================================================
+    // EXPORTS — Dessin natif sur Canvas HTML5
+    // Aucune dépendance externe, pas de problèmes CORS/fonts.
+    // ===========================================================
+
+    /**
+     * Helper : trace un rectangle arrondi (path seulement).
+     * Compatibilité tous navigateurs (fallback si roundRect absent).
+     */
+    function rr(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      }
+    }
+
+    /**
+     * Dessine un port individuel sur le canvas.
+     */
+    function drawPort(ctx, px, py, pw, ph, portIndex, label, isSFP = false) {
+      const vlanIds = portAssignments[portIndex] || [];
+
+      // Fond du port (avec clip pour les bandes trunk)
+      ctx.save();
+      rr(ctx, px, py, pw, ph, 3);
+      ctx.clip();
+      if (vlanIds.length === 0) {
+        const g = ctx.createLinearGradient(px, py, px, py + ph);
+        g.addColorStop(0, isSFP ? '#553c9a' : '#4a5568');
+        g.addColorStop(1, isSFP ? '#322659' : '#2d3748');
+        ctx.fillStyle = g;
+        ctx.fillRect(px, py, pw, ph);
+      } else {
+        const colors = vlanIds.map(id => vlans.find(v => v.id === id)?.color).filter(Boolean);
+        if (colors.length === 1) {
+          ctx.fillStyle = colors[0];
+          ctx.fillRect(px, py, pw, ph);
+        } else {
+          // Bandes verticales pour les trunks
+          const sw = pw / colors.length;
+          colors.forEach((c, i) => {
+            ctx.fillStyle = c;
+            ctx.fillRect(px + i * sw, py, sw, ph);
+          });
+        }
+      }
+      ctx.restore();
+
+      // Connecteur RJ45 / SFP
+      const connW = isSFP ? pw * 0.55 : pw * 0.42;
+      const connH = ph * 0.27;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      rr(ctx, px + (pw - connW) / 2, py + ph * 0.18, connW, connH, isSFP ? 2 : 1);
+      ctx.fill();
+
+      // Numéro / label du port
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.font = `bold ${pw < 32 ? 6.5 : 8}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, px + pw / 2, py + ph - 4);
+      ctx.textAlign = 'left';
+
+      // Badge LACP en bas du port
+      const portAgg = lacpAggregates.find(a => a.ports.includes(portIndex));
+      if (portAgg) {
+        ctx.fillStyle = portAgg.color + 'dd';
+        rr(ctx, px, py + ph - 8, pw, 8, 2);
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = `bold 5px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(portAgg.name, px + pw / 2, py + ph - 1.5);
+        ctx.textAlign = 'left';
+      } else {
+        // LED (si pas de badge LACP)
+        const ledColor = vlanIds.length > 0 ? '#48bb78' : '#f6ad55';
+        ctx.fillStyle = ledColor;
+        ctx.shadowColor = ledColor;
+        ctx.shadowBlur = 3;
+        ctx.beginPath();
+        ctx.arc(px + pw - 5, py + 4, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    /**
+     * Dessine le plan complet sur un Canvas HTML5 et le retourne.
+     * Utilisé par exportPNG() et exportPDF().
+     */
+    function drawToCanvas() {
+      const config = getSwitchConfig(currentModel);
+      const totalEthernetPorts = currentModel - config.sfpPorts;
+
+      // ── Constantes de mise en page ────────────────────────────
+      const SCALE      = 2;     // Résolution ×2 (HiDPI)
+      const PAD        = 40;    // Marge extérieure du document
+      const CPAD       = 20;    // Padding interne du châssis
+      const PORT_W     = currentModel >= 48 ? 28 : 38;
+      const PORT_H     = currentModel >= 48 ? 26 : 32;
+      const PGAP       = currentModel >= 48 ? 3  : 4;
+      const SEP_W      = 10;    // Largeur du séparateur avant les SFP
+
+      // ── Calcul des largeurs ───────────────────────────────────
+      const EAR_W        = 36;    // Largeur de chaque patte de rack
+      const portsLineW   = config.portsPerRow * (PORT_W + PGAP) - PGAP;
+      const sfpLineW     = config.sfpPorts > 0
+        ? SEP_W + config.sfpPorts * (PORT_W + PGAP) - PGAP : 0;
+      const chassisW     = portsLineW + sfpLineW + CPAD * 2 + 20;
+      const DOC_W        = Math.max(820, chassisW + EAR_W * 2 + PAD * 2);
+
+      // ── Calcul des hauteurs ───────────────────────────────────
+      const HEADER_H     = 90;
+      const lacpBarCount = lacpAggregates.length;
+      const CHASSIS_INNER_H = 26
+        + config.rows * (PORT_H + PGAP) - PGAP
+        + (lacpBarCount > 0 ? 8 + lacpBarCount * 20 : 0);
+      const CHASSIS_H    = CHASSIS_INNER_H + CPAD * 2;
+      const LEGEND_COLS  = 4;
+      const LEGEND_ROW_H = 56;
+      const LEGEND_H     = vlans.length > 0
+        ? 30 + Math.ceil(vlans.length / LEGEND_COLS) * LEGEND_ROW_H : 0;
+      const FOOTER_H     = 44;
+      const DOC_H        = PAD + HEADER_H + 20 + CHASSIS_H + 20
+        + LEGEND_H + (LEGEND_H > 0 ? 20 : 0) + FOOTER_H + PAD;
+
+      // ── Création du canvas ────────────────────────────────────
+      const canvas    = document.createElement('canvas');
+      canvas.width    = DOC_W * SCALE;
+      canvas.height   = DOC_H * SCALE;
+      const ctx       = canvas.getContext('2d');
+      ctx.scale(SCALE, SCALE);
+
+      // Fond blanc
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, DOC_W, DOC_H);
+
+      // Infos plan
+      const planClient     = document.getElementById('plan-client').value     || '—';
+      const planSwitchName = document.getElementById('plan-switch-name').value || 'Switch';
+      const planDate       = document.getElementById('plan-date').value
+        ? new Date(document.getElementById('plan-date').value).toLocaleDateString('fr-FR')
+        : new Date().toLocaleDateString('fr-FR');
+      const planTech       = document.getElementById('plan-tech').value || '—';
+
+      let curY = PAD;
+
+      // ══════════════════════════════════════════════════════════
+      // EN-TÊTE
+      // ══════════════════════════════════════════════════════════
+
+      // Carré bleu (logo)
+      ctx.fillStyle = '#2563eb';
+      rr(ctx, PAD, curY + 10, 42, 42, 10);
+      ctx.fill();
+
+      // Titre
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 19px system-ui, sans-serif';
+      ctx.fillText('Plan de Switch Réseau', PAD + 54, curY + 30);
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('Document de configuration', PAD + 54, curY + 48);
+
+      // Infos client (droite)
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 14px system-ui, sans-serif';
+      ctx.fillText(planClient, DOC_W - PAD, curY + 26);
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText(planDate, DOC_W - PAD, curY + 43);
+      ctx.fillText(`Réf. : ${planSwitchName}`, DOC_W - PAD, curY + 59);
+      ctx.textAlign = 'left';
+
+      // Séparateur
+      curY += HEADER_H;
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(PAD, curY);
+      ctx.lineTo(DOC_W - PAD, curY);
+      ctx.stroke();
+      curY += 20;
+
+      // ══════════════════════════════════════════════════════════
+      // CHÂSSIS
+      // ══════════════════════════════════════════════════════════
+
+      const chasX = PAD + EAR_W;
+      const chasY = curY;
+
+      // ── Pattes de rack (gauche et droite) ─────────────────────
+      function drawRackEar(x, y, w, h, isLeft) {
+        // Corps de la patte
+        const earGrad = ctx.createLinearGradient(x, y, x + w, y);
+        if (isLeft) {
+          earGrad.addColorStop(0, '#556070');
+          earGrad.addColorStop(0.3, '#3a4555');
+          earGrad.addColorStop(1, '#1f2836');
+        } else {
+          earGrad.addColorStop(0, '#1f2836');
+          earGrad.addColorStop(0.7, '#3a4555');
+          earGrad.addColorStop(1, '#556070');
+        }
+        ctx.fillStyle = earGrad;
+        rr(ctx, x, y, w, h, isLeft ? 4 : 4);
+        ctx.fill();
+        ctx.strokeStyle = isLeft ? '#556070' : '#556070';
+        ctx.lineWidth = 1;
+        rr(ctx, x, y, w, h, 4);
+        ctx.stroke();
+
+        // Vis (deux vis, une en haut et une en bas)
+        const screwX = x + w / 2;
+        const margin = h * 0.22;
+        [y + margin, y + h - margin].forEach(screwY => {
+          // Cercle de la vis
+          const screwGrad = ctx.createRadialGradient(
+            screwX - 2, screwY - 2, 1,
+            screwX, screwY, 7
+          );
+          screwGrad.addColorStop(0, '#8a9db5');
+          screwGrad.addColorStop(0.55, '#3d4a5c');
+          screwGrad.addColorStop(1, '#1f2836');
+          ctx.fillStyle = screwGrad;
+          ctx.beginPath();
+          ctx.arc(screwX, screwY, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#1a2535';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+
+          // Croix Phillips
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(screwX - 4, screwY); ctx.lineTo(screwX + 4, screwY); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(screwX, screwY - 4); ctx.lineTo(screwX, screwY + 4); ctx.stroke();
+        });
+      }
+
+      drawRackEar(PAD, chasY, EAR_W, CHASSIS_H, true);
+      drawRackEar(chasX + chassisW, chasY, EAR_W, CHASSIS_H, false);
+
+      // Fond dégradé sombre (châssis principal)
+      const grad = ctx.createLinearGradient(chasX, chasY, chasX, chasY + CHASSIS_H);
+      grad.addColorStop(0,   '#232d3b');
+      grad.addColorStop(0.4, '#161e28');
+      grad.addColorStop(1,   '#1e2836');
+      ctx.fillStyle = grad;
+      ctx.fillRect(chasX, chasY, chassisW, CHASSIS_H);
+      ctx.strokeStyle = '#3d4f62';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(chasX, chasY, chassisW, CHASSIS_H);
+
+      // LED verte
+      ctx.fillStyle = '#48bb78';
+      ctx.shadowColor = '#48bb78';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(chasX + CPAD + 4, chasY + CPAD + 4, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Nom du switch dans le châssis
+      ctx.fillStyle = '#d1d5db';
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.fillText((planSwitchName || 'SWITCH').toUpperCase(), chasX + CPAD + 14, chasY + CPAD + 8);
+      ctx.fillStyle = '#6b7280';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${currentModel}P`, chasX + chassisW - CPAD - 22, chasY + CPAD + 8);
+      ctx.textAlign = 'left';
+
+      // ── Ports ─────────────────────────────────────────────────
+      const portsStartX = chasX + CPAD;
+      const portsStartY = chasY + CPAD + 18;
+
+      for (let row = 0; row < config.rows; row++) {
+        for (let col = 0; col < config.portsPerRow; col++) {
+          const portNum   = config.rows === 2 ? col * 2 + row + 1 : col + 1;
+          const portIndex = portNum - 1;
+          drawPort(ctx,
+            portsStartX + col * (PORT_W + PGAP),
+            portsStartY + row * (PORT_H + PGAP),
+            PORT_W, PORT_H, portIndex, String(portNum));
+        }
+
+        // Ports SFP sur la dernière rangée
+        if (row === config.rows - 1 && config.sfpPorts > 0) {
+          const sfpBaseX = portsStartX + config.portsPerRow * (PORT_W + PGAP) + SEP_W;
+          const sfpY     = portsStartY + (config.rows - 1) * (PORT_H + PGAP);
+          for (let s = 0; s < config.sfpPorts; s++) {
+            drawPort(ctx,
+              sfpBaseX + s * (PORT_W + PGAP),
+              sfpY,
+              PORT_W, PORT_H, totalEthernetPorts + s, `SFP${s + 1}`, true);
+          }
+        }
+      }
+
+      // ── Barres LACP ───────────────────────────────────────────
+      let lacpBarY = portsStartY + config.rows * (PORT_H + PGAP) + 6;
+      lacpAggregates.forEach(agg => {
+        const ethPorts = agg.ports.filter(p => p < totalEthernetPorts);
+        if (ethPorts.length === 0) return;
+        const cols = ethPorts.map(p => portToColumn(p, config.rows));
+        const minC = Math.min(...cols);
+        const maxC = Math.max(...cols);
+        const barX = portsStartX + minC * (PORT_W + PGAP);
+        const barW = (maxC - minC) * (PORT_W + PGAP) + PORT_W;
+
+        ctx.fillStyle = agg.color + '55';
+        rr(ctx, barX, lacpBarY, barW, 16, 4); ctx.fill();
+        ctx.strokeStyle = agg.color;
+        ctx.lineWidth = 1.5;
+        rr(ctx, barX, lacpBarY, barW, 16, 4); ctx.stroke();
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 8px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          agg.name + (agg.description ? ' — ' + agg.description : ''),
+          barX + barW / 2, lacpBarY + 11);
+        ctx.textAlign = 'left';
+        lacpBarY += 20;
+      });
+
+      curY += CHASSIS_H + 20;
+
+      // ══════════════════════════════════════════════════════════
+      // LÉGENDE DES VLANs
+      // ══════════════════════════════════════════════════════════
+
+      if (vlans.length > 0) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = 'bold 10px system-ui, sans-serif';
+        ctx.fillText('LÉGENDE DES VLANs', PAD, curY + 14);
+
+        const itemW = (DOC_W - PAD * 2) / LEGEND_COLS;
+
+        vlans.forEach((vlan, i) => {
+          const col = i % LEGEND_COLS;
+          const row = Math.floor(i / LEGEND_COLS);
+          const ix  = PAD + col * itemW;
+          const iy  = curY + 24 + row * LEGEND_ROW_H;
+
+          // Fond de la carte
+          ctx.fillStyle = '#f9fafb';
+          rr(ctx, ix + 2, iy, itemW - 8, LEGEND_ROW_H - 8, 6); ctx.fill();
+          ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+          rr(ctx, ix + 2, iy, itemW - 8, LEGEND_ROW_H - 8, 6); ctx.stroke();
+
+          // Pastille couleur
+          ctx.fillStyle = vlan.color;
+          rr(ctx, ix + 10, iy + 12, 14, 14, 3); ctx.fill();
+
+          // Textes
+          ctx.fillStyle = '#6b7280';
+          ctx.font = 'bold 9px system-ui, sans-serif';
+          ctx.fillText(`VLAN ${vlan.id}`, ix + 30, iy + 18);
+          ctx.fillStyle = '#111827';
+          ctx.font = 'bold 11px system-ui, sans-serif';
+          ctx.fillText(vlan.name, ix + 30, iy + 31);
+          if (vlan.description) {
+            ctx.fillStyle = '#9ca3af';
+            ctx.font = '9px system-ui, sans-serif';
+            // Tronque si trop long
+            let desc = vlan.description;
+            const maxW = itemW - 44;
+            while (desc.length > 3 && ctx.measureText(desc).width > maxW) {
+              desc = desc.slice(0, -1);
+            }
+            if (desc !== vlan.description) desc += '…';
+            ctx.fillText(desc, ix + 30, iy + 42);
+          }
+        });
+
+        curY += LEGEND_H + 20;
+      }
+
+      // ══════════════════════════════════════════════════════════
+      // PIED DE PAGE
+      // ══════════════════════════════════════════════════════════
+
+      const footY = DOC_H - PAD - FOOTER_H + 10;
+      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PAD, footY); ctx.lineTo(DOC_W - PAD, footY); ctx.stroke();
+
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillText('Généré avec SWPlan', PAD, footY + 20);
+      ctx.textAlign = 'right';
+      ctx.fillText(`Technicien : ${planTech}`, DOC_W - PAD, footY + 20);
+      ctx.textAlign = 'left';
+
+      return canvas;
+    }
+
+    /**
+     * Exporte le plan en PNG
+     */
+    async function exportPNG() {
+      showToast('Génération du PNG en cours...', 'info');
+      try {
+        const canvas = drawToCanvas();
+        const link   = document.createElement('a');
+        const name   = document.getElementById('plan-switch-name').value || 'switch';
+        link.download = `swplan-${name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast('PNG exporté avec succès !', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Erreur lors de l\'export PNG', 'error');
+      }
+    }
+
+    /**
+     * Exporte le plan en PDF (A4, orientation automatique)
+     */
+    async function exportPDF() {
+      showToast('Génération du PDF en cours...', 'info');
+      try {
+        const canvas      = drawToCanvas();
+        const { jsPDF }   = window.jspdf;
+        const ratio       = canvas.width / canvas.height;
+        const orientation = ratio >= 1 ? 'landscape' : 'portrait';
+        const pdf         = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+        const pageW       = pdf.internal.pageSize.getWidth();
+        const pageH       = pdf.internal.pageSize.getHeight();
+        const margin      = 10;
+        const imgW        = pageW - margin * 2;
+        const imgH        = imgW / ratio;
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, (pageH - imgH) / 2, imgW, imgH);
+        const name = document.getElementById('plan-switch-name').value || 'switch';
+        pdf.save(`swplan-${name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.pdf`);
+        showToast('PDF exporté avec succès !', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Erreur lors de l\'export PDF', 'error');
+      }
+    }
+
+    // ===========================================================
+    // ÉCOUTEURS D'ÉVÉNEMENTS
+    // ===========================================================
+
+    // Changement de modèle de switch
+    document.getElementById('switch-model').addEventListener('change', (e) => {
+      const newModel = parseInt(e.target.value);
+
+      // Avertit si des ports configurés dépassent le nouveau nombre de ports
+      const assignedPorts = Object.keys(portAssignments).map(Number)
+        .filter(p => portAssignments[p] && portAssignments[p].length > 0);
+      const portsTooHigh = assignedPorts.filter(p => p >= newModel);
+
+      if (portsTooHigh.length > 0) {
+        if (!confirm(`Attention : ${portsTooHigh.length} port(s) configuré(s) seront perdus en changeant de modèle. Continuer ?`)) {
+          e.target.value = currentModel; // Annule le changement
+          return;
+        }
+        // Retire les ports qui dépassent le nouveau nombre
+        portsTooHigh.forEach(p => {
+          delete portAssignments[p];
+          delete portDescriptions[p];
+        });
+      }
+
+      currentModel = newModel;
+      renderSwitch();
+      showToast(`Switch ${newModel} ports sélectionné`, 'info');
+    });
+
+    // Mise à jour du nom du switch dans le châssis en temps réel
+    document.getElementById('plan-switch-name').addEventListener('input', () => {
+      renderSwitch();
+    });
+
+    // Pré-remplit la date avec aujourd'hui
+    document.getElementById('plan-date').valueAsDate = new Date();
+
+    // ===========================================================
+    // INITIALISATION
+    // ===========================================================
+
+    /**
+     * Lance l'application au chargement de la page
+     */
+    function init() {
+      initTheme();         // Applique le thème sauvegardé
+      buildColorPalette(); // Construit la palette de couleurs VLANs
+      renderVlanList();    // Liste des VLANs (vide au départ)
+      renderLacpList();    // Liste des agrégats LACP (vide au départ)
+      renderSwitch();      // Dessine le switch
+
+      // Ajoute quelques VLANs d'exemple pour la démonstration
+      // (vous pouvez supprimer ce bloc si vous voulez démarrer vide)
+      vlans = [
+        { id: 1,   name: 'Management',    description: 'VLAN administration',   color: '#ef4444' },
+        { id: 10,  name: 'LAN Utilisateurs', description: 'Bureautique général', color: '#3b82f6' },
+        { id: 20,  name: 'VoIP',          description: 'Téléphonie IP',          color: '#22c55e' },
+        { id: 30,  name: 'Serveurs',      description: 'DMZ serveurs',           color: '#8b5cf6' },
+        { id: 100, name: 'IoT',           description: 'Objets connectés',       color: '#f97316' },
+      ];
+      renderVlanList();
+      renderSwitch();
+    }
+
+    // Lance l'application
+    init();
+  </script>
+</body>
+</html>
