@@ -630,6 +630,23 @@
         <!-- Séparateur visuel -->
         <div class="w-px h-7 bg-gray-200 dark:bg-gray-600 mx-1"></div>
 
+        <!-- Boutons Undo / Redo -->
+        <button onclick="undo()" title="Annuler (Ctrl+Z)"
+          class="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 010 16v0M3 10l4-4m-4 4l4 4"/>
+          </svg>
+        </button>
+        <button onclick="redo()" title="Rétablir (Ctrl+Y)"
+          class="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a8 8 0 000 16v0M21 10l-4-4m4 4l-4 4"/>
+          </svg>
+        </button>
+
+        <!-- Séparateur visuel -->
+        <div class="w-px h-7 bg-gray-200 dark:bg-gray-600 mx-1"></div>
+
         <!-- Bouton export PNG -->
         <button onclick="exportPNG()"
           class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
@@ -669,6 +686,29 @@
     </div>
   </header>
 
+  <!-- Bannière de sélection multiple de ports -->
+  <div id="multi-select-banner"
+    style="display:none;"
+    class="bg-blue-600 text-white text-sm font-medium px-6 py-3 flex items-center gap-4 shadow-md sticky top-[65px] z-40">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    <span id="multi-select-count" class="font-semibold"></span>
+    <span class="text-blue-200">—</span>
+    <select id="multi-vlan-select"
+      class="bg-blue-700 border border-blue-500 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer">
+      <option value="">Choisir un VLAN…</option>
+    </select>
+    <button onclick="applyMultiVlan()"
+      class="bg-white text-blue-700 font-semibold text-sm px-4 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+      Appliquer
+    </button>
+    <span class="text-blue-200 text-xs">Shift+clic pour sélectionner les ports</span>
+    <button onclick="clearMultiSelection()" class="ml-auto text-blue-200 hover:text-white transition-colors text-sm font-medium">
+      ✕ Annuler
+    </button>
+  </div>
+
   <!-- ============================================================
        CONTENU PRINCIPAL : Sidebar gauche + Zone centrale
   ============================================================ -->
@@ -705,6 +745,15 @@
             <input type="text" id="plan-tech" placeholder="ex: Jean Martin"
               class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors placeholder-gray-400"/>
           </div>
+          <div class="flex items-center gap-2 pt-1">
+            <input type="checkbox" id="poe-enabled"
+              class="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+              onchange="renderSwitch()"/>
+            <label for="poe-enabled" class="text-xs font-medium text-gray-600 dark:text-gray-300 cursor-pointer flex items-center gap-1.5">
+              <span class="inline-block bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-xs font-bold px-1.5 py-0.5 rounded">PoE</span>
+              Switch avec alimentation PoE
+            </label>
+          </div>
         </div>
       </div>
 
@@ -714,14 +763,25 @@
           <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             VLANs
           </h2>
-          <!-- Bouton : ajouter un VLAN -->
-          <button onclick="openAddVlanModal()"
-            class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
-            </svg>
-            Ajouter
-          </button>
+          <div class="flex items-center gap-1.5">
+            <!-- Bouton : templates VLAN -->
+            <button onclick="openTemplatesModal()"
+              class="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+              title="Templates VLAN">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
+              </svg>
+              Templates
+            </button>
+            <!-- Bouton : ajouter un VLAN -->
+            <button onclick="openAddVlanModal()"
+              class="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+              </svg>
+              Ajouter
+            </button>
+          </div>
         </div>
 
         <!-- Liste des VLANs créés -->
@@ -766,6 +826,16 @@
         <div id="lacp-empty" class="text-center py-4 text-gray-400 dark:text-gray-500">
           <p class="text-xs">Aucun agrégat LACP.<br/>Cliquez sur "Ajouter" pour lier des ports.</p>
         </div>
+      </div>
+
+      <!-- Panel : Commentaires -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+          Commentaires
+        </h2>
+        <textarea id="plan-comments" rows="4"
+          placeholder="Notes libres, remarques, contexte…"
+          class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none transition-colors placeholder-gray-400"></textarea>
       </div>
 
       <!-- Panel : Aide rapide -->
@@ -1049,6 +1119,30 @@
   </div>
 
   <!-- ============================================================
+       MODAL : Templates VLAN
+  ============================================================ -->
+  <div id="modal-templates" class="modal-overlay" onclick="closeModalIfOverlay(event, 'modal-templates')">
+    <div class="modal-box bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-[500px] border border-gray-200 dark:border-gray-700">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Templates VLANs</h3>
+        <button onclick="closeModal('modal-templates')"
+          class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-xl leading-none">✕</button>
+      </div>
+
+      <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Prédéfinis</h4>
+      <div id="builtin-template-list" class="flex flex-col gap-2 mb-5"></div>
+
+      <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Mes templates</h4>
+      <div id="custom-template-list" class="flex flex-col gap-2 mb-4"></div>
+
+      <button onclick="saveAsTemplate()"
+        class="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium py-2.5 rounded-xl transition-colors border border-gray-200 dark:border-gray-600">
+        + Enregistrer les VLANs actuels comme template
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
        NOTIFICATION TOAST (coin bas droite)
   ============================================================ -->
   <div id="toast"
@@ -1093,6 +1187,14 @@
     // Format : [{ id: 1, name: "Po1", description: "...", ports: [0, 2], color: "#f97316" }]
     let lacpAggregates = [];
 
+    // ── Undo / Redo ────────────────────────────────────────────
+    let undoStack = [];
+    let redoStack = [];
+    const UNDO_LIMIT = 50;
+
+    // ── Sélection multiple de ports ────────────────────────────
+    let selectedPorts = new Set();
+
     // Couleur sélectionnée dans le modal LACP
     let lacpSelectedColor = '#f97316';
 
@@ -1106,6 +1208,34 @@
     const LACP_COLORS = [
       '#f97316', '#f59e0b', '#10b981', '#06b6d4',
       '#6366f1', '#a855f7', '#ec4899', '#14b8a6',
+    ];
+
+    // ===========================================================
+    // TEMPLATES VLAN PRÉDÉFINIS
+    // ===========================================================
+    const BUILTIN_TEMPLATES = [
+      { name: 'Standard Entreprise', vlans: [
+        { id: 10,  name: 'Admin',       color: '#ef4444' },
+        { id: 20,  name: 'Users',       color: '#3b82f6' },
+        { id: 30,  name: 'Servers',     color: '#8b5cf6' },
+        { id: 40,  name: 'VoIP',        color: '#22c55e' },
+        { id: 50,  name: 'Imprimantes', color: '#f97316' },
+        { id: 99,  name: 'Management',  color: '#eab308' },
+      ]},
+      { name: 'PME Simple', vlans: [
+        { id: 1,   name: 'Default',     color: '#6b7280' },
+        { id: 10,  name: 'LAN',         color: '#3b82f6' },
+        { id: 20,  name: 'Guest',       color: '#22c55e' },
+        { id: 30,  name: 'VoIP',        color: '#f97316' },
+      ]},
+      { name: 'Datacenter', vlans: [
+        { id: 10,  name: 'Management',  color: '#eab308' },
+        { id: 100, name: 'Production',  color: '#ef4444' },
+        { id: 200, name: 'Backup',      color: '#3b82f6' },
+        { id: 300, name: 'DMZ',         color: '#f97316' },
+        { id: 400, name: 'Storage',     color: '#8b5cf6' },
+        { id: 999, name: 'OOB',         color: '#14b8a6' },
+      ]},
     ];
 
     // ===========================================================
@@ -1250,10 +1380,11 @@
             ? `<span class="port-lacp-badge" style="background:${portAgg.color}cc;">${portAgg.name}</span>`
             : '';
 
+          const isSelected = selectedPorts.has(portIndex);
           portsHTML += `
-            <div class="port ${isAssigned ? 'assigned' : 'unassigned'}"
+            <div class="port ${isAssigned ? 'assigned' : 'unassigned'}${isSelected ? ' selected' : ''}"
               ${colorStyle}
-              onclick="openAssignModal(${portIndex})"
+              onclick="handlePortClick(event, ${portIndex})"
               title="">
               ${isTrunk ? '<span class="port-trunk-badge">TRUNK</span>' : '<div class="port-led"></div>'}
               <div class="port-connector"></div>
@@ -1282,10 +1413,11 @@
               ? `<span class="port-lacp-badge" style="background:${sfpAgg.color}cc;">${sfpAgg.name}</span>`
               : '';
 
+            const isSfpSelected = selectedPorts.has(portIndex);
             portsHTML += `
-              <div class="port sfp ${isAssigned ? 'assigned' : ''}"
+              <div class="port sfp ${isAssigned ? 'assigned' : ''}${isSfpSelected ? ' selected' : ''}"
                 ${colorStyle}
-                onclick="openAssignModal(${portIndex})"
+                onclick="handlePortClick(event, ${portIndex})"
                 title="">
                 ${isTrunk ? '<span class="port-trunk-badge">TRUNK</span>' : '<div class="port-led"></div>'}
                 <div class="port-connector"></div>
@@ -1317,6 +1449,9 @@
               <span class="text-xs font-bold text-gray-300 tracking-widest uppercase">
                 ${document.getElementById('plan-switch-name').value || 'SWITCH'}
               </span>
+              ${document.getElementById('poe-enabled').checked
+                ? '<span style="font-size:9px;font-weight:800;color:#fbbf24;background:rgba(0,0,0,0.35);padding:1px 6px;border-radius:3px;letter-spacing:0.5px;border:1px solid rgba(251,191,36,0.4);">PoE</span>'
+                : ''}
               <span class="text-xs text-gray-500 ml-auto">${currentModel}P</span>
             </div>
             <div class="port-panel">
@@ -1496,6 +1631,7 @@
      * Valide et enregistre le nouveau VLAN
      */
     function saveVlan() {
+      pushUndo();
       const id = parseInt(document.getElementById('vlan-id-input').value);
       const name = document.getElementById('vlan-name-input').value.trim();
       const description = document.getElementById('vlan-desc-input').value.trim();
@@ -1532,6 +1668,7 @@
      * Un port trunk perd seulement ce VLAN (les autres restent).
      */
     function deleteVlan(vlanId) {
+      pushUndo();
       const vlan = vlans.find(v => v.id === vlanId);
       if (!vlan) return;
 
@@ -1656,6 +1793,7 @@
      */
     function savePortVlans() {
       if (editingPortIndex === null) return;
+      pushUndo();
 
       // Sauvegarde la description du port
       const desc = document.getElementById('port-desc-input').value.trim();
@@ -1696,6 +1834,7 @@
      */
     function clearPort() {
       if (editingPortIndex === null) return;
+      pushUndo();
 
       // Sauvegarde quand même la description
       const desc = document.getElementById('port-desc-input').value.trim();
@@ -1947,6 +2086,7 @@
      * Enregistre le nouvel agrégat LACP
      */
     function saveLacp() {
+      pushUndo();
       const name = document.getElementById('lacp-name-input').value.trim();
       const desc = document.getElementById('lacp-desc-input').value.trim();
 
@@ -1991,6 +2131,7 @@
      * Supprime un agrégat LACP
      */
     function deleteLacp(id) {
+      pushUndo();
       const agg = lacpAggregates.find(a => a.id === id);
       if (!agg) return;
       lacpAggregates = lacpAggregates.filter(a => a.id !== id);
@@ -2007,7 +2148,7 @@
         showToast('Aucun port à effacer', 'info');
         return;
       }
-
+      pushUndo();
       portAssignments = {};
       portDescriptions = {};
       renderSwitch();
@@ -2085,7 +2226,13 @@
     // Fermeture des modals avec la touche Escape
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        ['modal-add-vlan', 'modal-assign-vlan', 'modal-add-lacp'].forEach(id => closeModal(id));
+        ['modal-add-vlan', 'modal-assign-vlan', 'modal-add-lacp', 'modal-templates'].forEach(id => closeModal(id));
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault(); undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault(); redo();
       }
     });
 
@@ -2171,11 +2318,195 @@
      * Sauvegarde toute la configuration dans un fichier .swplan (JSON).
      * Le fichier est téléchargé directement dans le navigateur.
      */
+    // ===========================================================
+    // UNDO / REDO
+    // ===========================================================
+
+    function snapshotState() {
+      return {
+        portAssignments:  JSON.parse(JSON.stringify(portAssignments)),
+        portDescriptions: JSON.parse(JSON.stringify(portDescriptions)),
+        vlans:            JSON.parse(JSON.stringify(vlans)),
+        lacpAggregates:   JSON.parse(JSON.stringify(lacpAggregates)),
+      };
+    }
+
+    function pushUndo() {
+      undoStack.push(snapshotState());
+      if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+      redoStack = [];
+    }
+
+    function applySnapshot(snap) {
+      portAssignments  = snap.portAssignments;
+      portDescriptions = snap.portDescriptions;
+      vlans            = snap.vlans;
+      lacpAggregates   = snap.lacpAggregates;
+      renderVlanList();
+      renderLacpList();
+      renderSwitch();
+    }
+
+    function undo() {
+      if (undoStack.length === 0) { showToast('Rien à annuler', 'info'); return; }
+      redoStack.push(snapshotState());
+      applySnapshot(undoStack.pop());
+      showToast('Action annulée', 'info');
+    }
+
+    function redo() {
+      if (redoStack.length === 0) { showToast('Rien à rétablir', 'info'); return; }
+      undoStack.push(snapshotState());
+      applySnapshot(redoStack.pop());
+      showToast('Action rétablie', 'info');
+    }
+
+    // ===========================================================
+    // SÉLECTION MULTIPLE DE PORTS
+    // ===========================================================
+
+    function handlePortClick(event, portIndex) {
+      if (event.shiftKey || selectedPorts.size > 0) {
+        if (selectedPorts.has(portIndex)) {
+          selectedPorts.delete(portIndex);
+        } else {
+          selectedPorts.add(portIndex);
+        }
+        updateMultiSelectUI();
+      } else {
+        openAssignModal(portIndex);
+      }
+    }
+
+    function updateMultiSelectUI() {
+      const banner = document.getElementById('multi-select-banner');
+      const count  = document.getElementById('multi-select-count');
+      const sel    = document.getElementById('multi-vlan-select');
+
+      if (selectedPorts.size === 0) {
+        banner.style.display = 'none';
+        renderSwitch();
+        return;
+      }
+
+      banner.style.display = 'flex';
+      count.textContent = `${selectedPorts.size} port(s) sélectionné(s)`;
+      sel.innerHTML = '<option value="">Choisir un VLAN…</option>' +
+        vlans.map(v => `<option value="${v.id}">VLAN ${v.id} — ${v.name}</option>`).join('');
+
+      renderSwitch();
+    }
+
+    function applyMultiVlan() {
+      const vlanId = parseInt(document.getElementById('multi-vlan-select').value);
+      if (!vlanId) { showToast('Choisissez un VLAN', 'warning'); return; }
+      pushUndo();
+      const count = selectedPorts.size;
+      selectedPorts.forEach(portIndex => {
+        portAssignments[portIndex] = [vlanId];
+      });
+      selectedPorts.clear();
+      document.getElementById('multi-select-banner').style.display = 'none';
+      renderSwitch();
+      showToast(`✓ VLAN ${vlanId} appliqué à ${count} port(s)`, 'success');
+    }
+
+    function clearMultiSelection() {
+      selectedPorts.clear();
+      updateMultiSelectUI();
+    }
+
+    // ===========================================================
+    // TEMPLATES VLAN
+    // ===========================================================
+
+    function openTemplatesModal() {
+      renderBuiltinTemplates();
+      renderCustomTemplates();
+      openModal('modal-templates');
+    }
+
+    function renderBuiltinTemplates() {
+      document.getElementById('builtin-template-list').innerHTML =
+        BUILTIN_TEMPLATES.map((t, i) => `
+          <div class="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+            <div>
+              <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${t.name}</p>
+              <p class="text-xs text-gray-400">${t.vlans.length} VLANs</p>
+            </div>
+            <button onclick="applyTemplate(${i}, false)"
+              class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+              Appliquer
+            </button>
+          </div>`).join('');
+    }
+
+    function renderCustomTemplates() {
+      const customs = JSON.parse(localStorage.getItem('swplan-templates') || '[]');
+      const el = document.getElementById('custom-template-list');
+      if (customs.length === 0) {
+        el.innerHTML = '<p class="text-xs text-gray-400 dark:text-gray-500 text-center py-2">Aucun template personnalisé.</p>';
+        return;
+      }
+      el.innerHTML = customs.map((t, i) => `
+        <div class="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+          <div>
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">${t.name}</p>
+            <p class="text-xs text-gray-400">${t.vlans.length} VLANs</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="applyTemplate(${i}, true)"
+              class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+              Appliquer
+            </button>
+            <button onclick="deleteCustomTemplate(${i})"
+              class="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors">
+              ✕
+            </button>
+          </div>
+        </div>`).join('');
+    }
+
+    function applyTemplate(index, isCustom) {
+      const source = isCustom
+        ? JSON.parse(localStorage.getItem('swplan-templates') || '[]')
+        : BUILTIN_TEMPLATES;
+      const template = source[index];
+      if (!template) return;
+
+      if (vlans.length > 0 && !confirm(`Remplacer les ${vlans.length} VLAN(s) actuels par le template "${template.name}" ?`)) return;
+
+      pushUndo();
+      vlans = template.vlans.map(v => ({ ...v }));
+      renderVlanList();
+      renderSwitch();
+      closeModal('modal-templates');
+      showToast(`✓ Template "${template.name}" appliqué`, 'success');
+    }
+
+    function saveAsTemplate() {
+      if (vlans.length === 0) { showToast('Aucun VLAN à sauvegarder', 'warning'); return; }
+      const name = prompt('Nom du template :');
+      if (!name || !name.trim()) return;
+      const customs = JSON.parse(localStorage.getItem('swplan-templates') || '[]');
+      customs.push({ name: name.trim(), vlans: JSON.parse(JSON.stringify(vlans)) });
+      localStorage.setItem('swplan-templates', JSON.stringify(customs));
+      renderCustomTemplates();
+      showToast(`✓ Template "${name.trim()}" sauvegardé`, 'success');
+    }
+
+    function deleteCustomTemplate(index) {
+      const customs = JSON.parse(localStorage.getItem('swplan-templates') || '[]');
+      customs.splice(index, 1);
+      localStorage.setItem('swplan-templates', JSON.stringify(customs));
+      renderCustomTemplates();
+    }
+
     function saveConfig() {
       // Rassemble toutes les données de l'application
       const config = {
         // Version du format — permet de gérer les futures évolutions
-        version: 1,
+        version: 2,
 
         // Infos du plan (champs du formulaire)
         planInfo: {
@@ -2187,6 +2518,12 @@
 
         // Modèle de switch sélectionné
         currentModel,
+
+        // Option PoE
+        poeEnabled: document.getElementById('poe-enabled').checked,
+
+        // Commentaires libres
+        comments: document.getElementById('plan-comments').value,
 
         // Liste des VLANs
         vlans,
@@ -2235,7 +2572,7 @@
         try {
           const config = JSON.parse(e.target.result);
 
-          // Vérifie que le fichier a la bonne structure (version 1)
+          // Vérifie que le fichier a la bonne structure (version 1 ou 2)
           if (!config.version || !config.vlans || !config.currentModel) {
             showToast('⚠️ Fichier invalide ou incompatible', 'error');
             return;
@@ -2269,6 +2606,15 @@
 
           // ── Restaure les agrégats LACP ─────────────────────────
           lacpAggregates = config.lacpAggregates || [];
+
+          // ── Restaure les champs v2 (compatibilité v1) ──────────
+          document.getElementById('poe-enabled').checked = config.poeEnabled || false;
+          document.getElementById('plan-comments').value  = config.comments   || '';
+
+          // ── Réinitialise les piles undo/redo ──────────────────
+          undoStack = []; redoStack = [];
+          selectedPorts.clear();
+          document.getElementById('multi-select-banner').style.display = 'none';
 
           // ── Met à jour toute l'interface ──────────────────────
           renderVlanList();
@@ -2328,8 +2674,8 @@
       ctx.clip();
       if (vlanIds.length === 0) {
         const g = ctx.createLinearGradient(px, py, px, py + ph);
-        g.addColorStop(0, isSFP ? '#553c9a' : '#4a5568');
-        g.addColorStop(1, isSFP ? '#322659' : '#2d3748');
+        g.addColorStop(0, isSFP ? '#c4b5fd' : '#dde3ea');
+        g.addColorStop(1, isSFP ? '#a78bfa' : '#c8d0d9');
         ctx.fillStyle = g;
         ctx.fillRect(px, py, pw, ph);
       } else {
@@ -2351,12 +2697,12 @@
       // Connecteur RJ45 / SFP
       const connW = isSFP ? pw * 0.55 : pw * 0.42;
       const connH = ph * 0.27;
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
       rr(ctx, px + (pw - connW) / 2, py + ph * 0.18, connW, connH, isSFP ? 2 : 1);
       ctx.fill();
 
       // Numéro / label du port
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillStyle = vlanIds.length > 0 ? 'rgba(255,255,255,0.95)' : 'rgba(30,41,59,0.85)';
       ctx.font = `bold ${pw < 32 ? 6.5 : 8}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.fillText(label, px + pw / 2, py + ph - 4);
@@ -2423,8 +2769,18 @@
       const LEGEND_H     = vlans.length > 0
         ? 30 + Math.ceil(vlans.length / LEGEND_COLS) * LEGEND_ROW_H : 0;
       const FOOTER_H     = 44;
+      const planComments = document.getElementById('plan-comments').value.trim();
+      const COMMENT_LINE_H = 16;
+      const COMMENT_MAX_W  = Math.max(820, chassisW + EAR_W * 2 + PAD * 2) - PAD * 2;
+      // Pré-calcul du nombre de lignes pour la hauteur (approx. 7px/char)
+      const commentLines = planComments ? planComments.split('\n').reduce((acc, line) => {
+        return acc + Math.max(1, Math.ceil((line.length * 6.5) / COMMENT_MAX_W));
+      }, 0) : 0;
+      const COMMENTS_H   = planComments ? 30 + commentLines * COMMENT_LINE_H + 12 : 0;
       const DOC_H        = PAD + HEADER_H + 20 + CHASSIS_H + 20
-        + LEGEND_H + (LEGEND_H > 0 ? 20 : 0) + FOOTER_H + PAD;
+        + LEGEND_H + (LEGEND_H > 0 ? 20 : 0)
+        + COMMENTS_H + (COMMENTS_H > 0 ? 20 : 0)
+        + FOOTER_H + PAD;
 
       // ── Création du canvas ────────────────────────────────────
       const canvas    = document.createElement('canvas');
@@ -2492,49 +2848,47 @@
       const chasX = PAD + EAR_W;
       const chasY = curY;
 
-      // ── Pattes de rack (gauche et droite) ─────────────────────
+      // ── Pattes de rack (gauche et droite) — aluminium clair ───
       function drawRackEar(x, y, w, h, isLeft) {
-        // Corps de la patte
         const earGrad = ctx.createLinearGradient(x, y, x + w, y);
         if (isLeft) {
-          earGrad.addColorStop(0, '#556070');
-          earGrad.addColorStop(0.3, '#3a4555');
-          earGrad.addColorStop(1, '#1f2836');
+          earGrad.addColorStop(0,   '#c8d4dc');
+          earGrad.addColorStop(0.4, '#a8b8c4');
+          earGrad.addColorStop(1,   '#8fa0ae');
         } else {
-          earGrad.addColorStop(0, '#1f2836');
-          earGrad.addColorStop(0.7, '#3a4555');
-          earGrad.addColorStop(1, '#556070');
+          earGrad.addColorStop(0,   '#8fa0ae');
+          earGrad.addColorStop(0.6, '#a8b8c4');
+          earGrad.addColorStop(1,   '#c8d4dc');
         }
         ctx.fillStyle = earGrad;
-        rr(ctx, x, y, w, h, isLeft ? 4 : 4);
+        rr(ctx, x, y, w, h, 4);
         ctx.fill();
-        ctx.strokeStyle = isLeft ? '#556070' : '#556070';
+        ctx.strokeStyle = '#90a4ae';
         ctx.lineWidth = 1;
         rr(ctx, x, y, w, h, 4);
         ctx.stroke();
 
-        // Vis (deux vis, une en haut et une en bas)
+        // Vis aluminium (deux vis, une en haut et une en bas)
         const screwX = x + w / 2;
         const margin = h * 0.22;
         [y + margin, y + h - margin].forEach(screwY => {
-          // Cercle de la vis
           const screwGrad = ctx.createRadialGradient(
             screwX - 2, screwY - 2, 1,
             screwX, screwY, 7
           );
-          screwGrad.addColorStop(0, '#8a9db5');
-          screwGrad.addColorStop(0.55, '#3d4a5c');
-          screwGrad.addColorStop(1, '#1f2836');
+          screwGrad.addColorStop(0,    '#f0f4f8');
+          screwGrad.addColorStop(0.55, '#94a3b8');
+          screwGrad.addColorStop(1,    '#64748b');
           ctx.fillStyle = screwGrad;
           ctx.beginPath();
           ctx.arc(screwX, screwY, 7, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = '#1a2535';
+          ctx.strokeStyle = '#78909c';
           ctx.lineWidth = 0.5;
           ctx.stroke();
 
           // Croix Phillips
-          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.strokeStyle = 'rgba(0,0,0,0.28)';
           ctx.lineWidth = 1.5;
           ctx.lineCap = 'round';
           ctx.beginPath(); ctx.moveTo(screwX - 4, screwY); ctx.lineTo(screwX + 4, screwY); ctx.stroke();
@@ -2545,33 +2899,61 @@
       drawRackEar(PAD, chasY, EAR_W, CHASSIS_H, true);
       drawRackEar(chasX + chassisW, chasY, EAR_W, CHASSIS_H, false);
 
-      // Fond dégradé sombre (châssis principal)
+      // Fond clair (châssis principal)
       const grad = ctx.createLinearGradient(chasX, chasY, chasX, chasY + CHASSIS_H);
-      grad.addColorStop(0,   '#232d3b');
-      grad.addColorStop(0.4, '#161e28');
-      grad.addColorStop(1,   '#1e2836');
+      grad.addColorStop(0,   '#f8fafc');
+      grad.addColorStop(0.5, '#f1f5f9');
+      grad.addColorStop(1,   '#f8fafc');
       ctx.fillStyle = grad;
       ctx.fillRect(chasX, chasY, chassisW, CHASSIS_H);
-      ctx.strokeStyle = '#3d4f62';
+      ctx.strokeStyle = '#cbd5e1';
       ctx.lineWidth = 1;
       ctx.strokeRect(chasX, chasY, chassisW, CHASSIS_H);
 
+      // Panneau de ports (fond légèrement plus sombre)
+      const panelPad = 6;
+      const panelX = chasX + CPAD - panelPad;
+      const panelY = chasY + CPAD + 14;
+      const panelW = chassisW - CPAD * 2 + panelPad * 2;
+      const panelH = config.rows * (PORT_H + PGAP) - PGAP
+        + (lacpBarCount > 0 ? 8 + lacpBarCount * 20 : 0) + panelPad * 2;
+      ctx.fillStyle = '#e8ecf1';
+      rr(ctx, panelX, panelY, panelW, panelH, 4); ctx.fill();
+      ctx.strokeStyle = '#c8d0d9';
+      ctx.lineWidth = 1;
+      rr(ctx, panelX, panelY, panelW, panelH, 4); ctx.stroke();
+
       // LED verte
-      ctx.fillStyle = '#48bb78';
-      ctx.shadowColor = '#48bb78';
-      ctx.shadowBlur = 8;
+      ctx.fillStyle = '#22c55e';
+      ctx.shadowColor = '#22c55e';
+      ctx.shadowBlur = 6;
       ctx.beginPath();
       ctx.arc(chasX + CPAD + 4, chasY + CPAD + 4, 3.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
 
       // Nom du switch dans le châssis
-      ctx.fillStyle = '#d1d5db';
+      ctx.fillStyle = '#1e293b';
       ctx.font = 'bold 11px system-ui, sans-serif';
       ctx.fillText((planSwitchName || 'SWITCH').toUpperCase(), chasX + CPAD + 14, chasY + CPAD + 8);
-      ctx.fillStyle = '#6b7280';
+
+      // Badge PoE (si activé)
+      const poeEnabled = document.getElementById('poe-enabled').checked;
+      if (poeEnabled) {
+        const poeText = 'PoE';
+        ctx.font = 'bold 8px system-ui, sans-serif';
+        const poeW = ctx.measureText(poeText).width + 10;
+        ctx.fillStyle = 'rgba(251,191,36,0.15)';
+        rr(ctx, chasX + CPAD + 12 + ctx.measureText((planSwitchName || 'SWITCH').toUpperCase()) + 8, chasY + CPAD - 1, poeW, 12, 2);
+        ctx.fill();
+        ctx.fillStyle = '#d97706';
+        ctx.fillText(poeText, chasX + CPAD + 12 + ctx.measureText((planSwitchName || 'SWITCH').toUpperCase()) + 13, chasY + CPAD + 8);
+      }
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px system-ui, sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`${currentModel}P`, chasX + chassisW - CPAD - 22, chasY + CPAD + 8);
+      ctx.fillText(`${currentModel}P${poeEnabled ? ' PoE' : ''}`, chasX + chassisW - CPAD - 22, chasY + CPAD + 8);
       ctx.textAlign = 'left';
 
       // ── Ports ─────────────────────────────────────────────────
@@ -2612,13 +2994,13 @@
         const barX = portsStartX + minC * (PORT_W + PGAP);
         const barW = (maxC - minC) * (PORT_W + PGAP) + PORT_W;
 
-        ctx.fillStyle = agg.color + '55';
+        ctx.fillStyle = agg.color + '33';
         rr(ctx, barX, lacpBarY, barW, 16, 4); ctx.fill();
         ctx.strokeStyle = agg.color;
         ctx.lineWidth = 1.5;
         rr(ctx, barX, lacpBarY, barW, 16, 4); ctx.stroke();
 
-        ctx.fillStyle = 'white';
+        ctx.fillStyle = '#1e293b';
         ctx.font = 'bold 8px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(
@@ -2682,6 +3064,46 @@
       }
 
       // ══════════════════════════════════════════════════════════
+      // COMMENTAIRES
+      // ══════════════════════════════════════════════════════════
+
+      if (planComments) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = 'bold 10px system-ui, sans-serif';
+        ctx.fillText('COMMENTAIRES', PAD, curY + 14);
+        curY += 24;
+
+        // Fond de la zone
+        ctx.fillStyle = '#f9fafb';
+        rr(ctx, PAD, curY, DOC_W - PAD * 2, COMMENTS_H - 24, 6); ctx.fill();
+        ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+        rr(ctx, PAD, curY, DOC_W - PAD * 2, COMMENTS_H - 24, 6); ctx.stroke();
+
+        // Dessin du texte avec retour à la ligne manuel
+        ctx.fillStyle = '#374151';
+        ctx.font = '11px system-ui, sans-serif';
+        const maxW = DOC_W - PAD * 2 - 24;
+        let lineY = curY + 16;
+        planComments.split('\n').forEach(paragraph => {
+          const words = paragraph.split(' ');
+          let line = '';
+          words.forEach(word => {
+            const test = line ? line + ' ' + word : word;
+            if (ctx.measureText(test).width > maxW && line) {
+              ctx.fillText(line, PAD + 12, lineY);
+              lineY += COMMENT_LINE_H;
+              line = word;
+            } else {
+              line = test;
+            }
+          });
+          if (line) { ctx.fillText(line, PAD + 12, lineY); lineY += COMMENT_LINE_H; }
+        });
+
+        curY += COMMENTS_H - 24 + 20;
+      }
+
+      // ══════════════════════════════════════════════════════════
       // PIED DE PAGE
       // ══════════════════════════════════════════════════════════
 
@@ -2691,7 +3113,7 @@
 
       ctx.fillStyle = '#9ca3af';
       ctx.font = '11px system-ui, sans-serif';
-      ctx.fillText('Généré avec SWPlan', PAD, footY + 20);
+      ctx.fillText('Généré avec SWPlan — swplan.antoninpomies.fr', PAD, footY + 20);
       ctx.textAlign = 'right';
       ctx.fillText(`Technicien : ${planTech}`, DOC_W - PAD, footY + 20);
       ctx.textAlign = 'left';
