@@ -384,23 +384,28 @@
     }
 
     /* ========================================================
-       BADGE TAGGED / UNTAGGED affiché en haut à gauche du port
+       LETTRE TAGGED / UNTAGGED — remplace le voyant LED
+       Positionnée en haut à droite du port
     ======================================================== */
-    .port-tag-badge {
+    .port-tag-letter {
       position: absolute;
       top: 2px;
-      left: 2px;
-      font-size: 5.5px;
+      right: 3px;
+      width: 11px;
+      height: 11px;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 7px;
       font-weight: 900;
       color: white;
-      border-radius: 2px;
-      padding: 1px 2px;
-      line-height: 1.3;
-      letter-spacing: 0.3px;
+      line-height: 1;
       pointer-events: none;
     }
-    .port-tag-badge.tagged   { background: rgba(59,130,246,0.75); }
-    .port-tag-badge.untagged { background: rgba(34,197,94,0.75);  }
+    .port-tag-letter.tagged   { background: rgba(59,130,246,0.85); }
+    .port-tag-letter.untagged { background: rgba(34,197,94,0.85);  }
+    .chassis-large .port-tag-letter { width: 9px; height: 9px; font-size: 6px; }
 
     /* ========================================================
        BADGE LACP affiché en bas du port agrégé
@@ -914,17 +919,33 @@
       <!-- Légende des VLANs -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
         <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-          Légende des VLANs
+          Légende
         </h2>
 
-        <!-- Grille de la légende -->
+        <!-- Indicateurs de mode de port -->
+        <div class="flex flex-wrap gap-3 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded flex items-center justify-center bg-green-500 text-white text-xs font-black shadow-sm">U</span>
+            <span class="text-xs text-gray-600 dark:text-gray-400">Untagged <span class="text-gray-400 dark:text-gray-500">(accès, sans tag 802.1Q)</span></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded flex items-center justify-center bg-blue-500 text-white text-xs font-black shadow-sm">T</span>
+            <span class="text-xs text-gray-600 dark:text-gray-400">Tagged <span class="text-gray-400 dark:text-gray-500">(avec tag 802.1Q)</span></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded flex items-center justify-center bg-gray-600 dark:bg-gray-500 text-white text-[9px] font-black shadow-sm leading-none text-center">TRK</span>
+            <span class="text-xs text-gray-600 dark:text-gray-400">Trunk <span class="text-gray-400 dark:text-gray-500">(multi-VLANs)</span></span>
+          </div>
+        </div>
+
+        <!-- Grille de la légende VLANs -->
         <div id="legend-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           <!-- Rempli dynamiquement -->
         </div>
 
         <!-- Message si aucun VLAN -->
         <div id="legend-empty" class="text-center py-4 text-gray-400 dark:text-gray-500 text-sm">
-          La légende apparaîtra ici une fois les VLANs créés.
+          La légende des VLANs apparaîtra ici une fois les VLANs créés.
         </div>
       </div>
 
@@ -1421,16 +1442,14 @@
             ? `<span class="port-lacp-badge" style="background:${portAgg.color}cc;">${portAgg.name}</span>`
             : '';
 
-          // Badge tagged/untagged
+          // Badge TRUNK (top-left) et lettre T/U (top-right à la place du voyant)
           const tagging = portTagging[portIndex] || 'untagged';
-          let topBadgeHTML;
-          if (isTrunk) {
-            topBadgeHTML = '<span class="port-trunk-badge">TRUNK</span>';
-          } else if (isAssigned) {
-            topBadgeHTML = `<span class="port-tag-badge ${tagging}">${tagging === 'tagged' ? 'T' : 'U'}</span>`;
-          } else {
-            topBadgeHTML = '<div class="port-led"></div>';
-          }
+          const trunkBadge  = isTrunk ? '<span class="port-trunk-badge">TRUNK</span>' : '';
+          const rightIndicator = isAssigned && !isTrunk
+            ? `<span class="port-tag-letter ${tagging}">${tagging === 'tagged' ? 'T' : 'U'}</span>`
+            : !isAssigned
+              ? '<div class="port-led"></div>'
+              : '';
 
           const isSelected = selectedPorts.has(portIndex);
           portsHTML += `
@@ -1438,7 +1457,8 @@
               ${colorStyle}
               onclick="handlePortClick(event, ${portIndex})"
               title="">
-              ${topBadgeHTML}
+              ${trunkBadge}
+              ${rightIndicator}
               <div class="port-connector"></div>
               <span class="port-number">${portNum}</span>
               ${lacpBadgeHTML}
@@ -1465,16 +1485,14 @@
               ? `<span class="port-lacp-badge" style="background:${sfpAgg.color}cc;">${sfpAgg.name}</span>`
               : '';
 
-            // Badge tagged/untagged pour les ports SFP
+            // Badge TRUNK (top-left) et lettre T/U (top-right) pour les ports SFP
             const sfpTagging = portTagging[portIndex] || 'untagged';
-            let sfpTopBadge;
-            if (isTrunk) {
-              sfpTopBadge = '<span class="port-trunk-badge">TRUNK</span>';
-            } else if (isAssigned) {
-              sfpTopBadge = `<span class="port-tag-badge ${sfpTagging}">${sfpTagging === 'tagged' ? 'T' : 'U'}</span>`;
-            } else {
-              sfpTopBadge = '<div class="port-led"></div>';
-            }
+            const sfpTrunkBadge = isTrunk ? '<span class="port-trunk-badge">TRUNK</span>' : '';
+            const sfpRightIndicator = isAssigned && !isTrunk
+              ? `<span class="port-tag-letter ${sfpTagging}">${sfpTagging === 'tagged' ? 'T' : 'U'}</span>`
+              : !isAssigned
+                ? '<div class="port-led"></div>'
+                : '';
 
             const isSfpSelected = selectedPorts.has(portIndex);
             portsHTML += `
@@ -1482,7 +1500,8 @@
                 ${colorStyle}
                 onclick="handlePortClick(event, ${portIndex})"
                 title="">
-                ${sfpTopBadge}
+                ${sfpTrunkBadge}
+                ${sfpRightIndicator}
                 <div class="port-connector"></div>
                 <span class="port-number">SFP${s + 1}</span>
                 ${sfpLacpBadge}
@@ -2821,21 +2840,12 @@
         ctx.textAlign = 'center';
         ctx.fillText(portAgg.name, px + pw / 2, py + ph - 1.5);
         ctx.textAlign = 'left';
-      } else {
-        // LED (si pas de badge LACP)
-        const ledColor = vlanIds.length > 0 ? '#48bb78' : '#f6ad55';
-        ctx.fillStyle = ledColor;
-        ctx.shadowColor = ledColor;
-        ctx.shadowBlur = 3;
-        ctx.beginPath();
-        ctx.arc(px + pw - 5, py + 4, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
       }
 
-      // Badge TRUNK ou Tagged/Untagged en haut à gauche
+      // ── Indicateurs de mode en haut à gauche / droite ─────────
+
+      // Badge TRUNK top-left (si trunk)
       if (vlanIds.length > 1) {
-        // Badge TRUNK
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
         const trunkW = pw * 0.75;
         rr(ctx, px + 1, py + 1, trunkW, ph * 0.22, 1);
@@ -2845,21 +2855,34 @@
         ctx.textAlign = 'center';
         ctx.fillText('TRUNK', px + 1 + trunkW / 2, py + 1 + ph * 0.16);
         ctx.textAlign = 'left';
-      } else if (vlanIds.length === 1) {
-        // Badge T (tagged) ou U (untagged)
-        const tagging = portTagging[portIndex] || 'untagged';
-        const tagColor  = tagging === 'tagged' ? 'rgba(59,130,246,0.8)' : 'rgba(34,197,94,0.8)';
-        const tagText   = tagging === 'tagged' ? 'T' : 'U';
-        const badgeSize = pw * 0.28;
+      }
+
+      // Lettre T/U top-right (si port assigné, remplace le voyant)
+      // Pour les unassigned : voyant orange classique
+      if (vlanIds.length === 1) {
+        const tagging  = portTagging[portIndex] || 'untagged';
+        const tagColor = tagging === 'tagged' ? 'rgba(59,130,246,0.9)' : 'rgba(34,197,94,0.9)';
+        const tagText  = tagging === 'tagged' ? 'T' : 'U';
+        const sz = pw < 32 ? 8 : 10;
         ctx.fillStyle = tagColor;
-        rr(ctx, px + 1, py + 1, badgeSize, ph * 0.22, 1);
+        rr(ctx, px + pw - sz - 1, py + 1, sz, sz, 1.5);
         ctx.fill();
         ctx.fillStyle = 'white';
-        ctx.font = `bold ${pw < 32 ? 4 : 5}px system-ui, sans-serif`;
+        ctx.font = `bold ${pw < 32 ? 5 : 6.5}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(tagText, px + 1 + badgeSize / 2, py + 1 + ph * 0.16);
+        ctx.fillText(tagText, px + pw - sz - 1 + sz / 2, py + 1 + sz * 0.78);
         ctx.textAlign = 'left';
+      } else if (vlanIds.length === 0) {
+        // Voyant orange pour port non assigné
+        ctx.fillStyle = '#f6ad55';
+        ctx.shadowColor = '#f6ad55';
+        ctx.shadowBlur = 3;
+        ctx.beginPath();
+        ctx.arc(px + pw - 5, py + 4, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
+      // Trunk (vlanIds.length > 1) : pas de voyant, le badge TRUNK suffit
     }
 
     /**
@@ -2907,7 +2930,9 @@
         return acc + Math.max(1, Math.ceil((line.length * 6.5) / COMMENT_MAX_W));
       }, 0) : 0;
       const COMMENTS_H   = planComments ? 30 + commentLines * COMMENT_LINE_H + 12 : 0;
+      const PORT_MODE_H  = 68; // Section légende mode de port (T/U/TRUNK)
       const DOC_H        = PAD + HEADER_H + 20 + CHASSIS_H + 20
+        + PORT_MODE_H
         + LEGEND_H + (LEGEND_H > 0 ? 20 : 0)
         + COMMENTS_H + (COMMENTS_H > 0 ? 20 : 0)
         + FOOTER_H + PAD;
@@ -3145,6 +3170,48 @@
       // ══════════════════════════════════════════════════════════
       // LÉGENDE DES VLANs
       // ══════════════════════════════════════════════════════════
+
+      // ── Légende mode de port (T / U / TRUNK) ──────────────────
+      {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = 'bold 10px system-ui, sans-serif';
+        ctx.fillText('MODE DES PORTS', PAD, curY + 14);
+
+        const tagItems = [
+          { letter: 'U', color: '#22c55e', label: 'Untagged', sub: 'accès, sans tag 802.1Q' },
+          { letter: 'T', color: '#3b82f6', label: 'Tagged',   sub: 'avec tag 802.1Q'        },
+          { letter: 'TRK', color: '#4b5563', label: 'Trunk', sub: 'multi-VLANs'              },
+        ];
+        const tagItemW = 180;
+        tagItems.forEach((item, i) => {
+          const ix = PAD + i * tagItemW;
+          const iy = curY + 22;
+
+          // Carré coloré avec lettre
+          ctx.fillStyle = item.color;
+          rr(ctx, ix, iy, 18, 18, 3); ctx.fill();
+          ctx.fillStyle = 'white';
+          ctx.font = `bold ${item.letter.length > 1 ? 6 : 8}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(item.letter, ix + 9, iy + 12);
+          ctx.textAlign = 'left';
+
+          // Labels
+          ctx.fillStyle = '#111827';
+          ctx.font = 'bold 10px system-ui, sans-serif';
+          ctx.fillText(item.label, ix + 24, iy + 10);
+          ctx.fillStyle = '#9ca3af';
+          ctx.font = '9px system-ui, sans-serif';
+          ctx.fillText(item.sub, ix + 24, iy + 20);
+        });
+
+        curY += 52;
+
+        // Séparateur
+        ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD, curY); ctx.lineTo(DOC_W - PAD, curY); ctx.stroke();
+        curY += 16;
+      }
 
       if (vlans.length > 0) {
         ctx.fillStyle = '#6b7280';
