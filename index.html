@@ -1118,6 +1118,7 @@
           VLAN natif <span class="font-normal text-gray-400">(untagged)</span>
         </label>
         <select id="port-native-vlan-select"
+          onchange="onNativeVlanChange(this)"
           class="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors cursor-pointer">
           <option value="">Aucun</option>
           <!-- Rempli dynamiquement -->
@@ -1945,13 +1946,60 @@
             `<option value="${v.id}" ${currentNativeId === v.id ? 'selected' : ''}>VLAN ${v.id} — ${v.name}</option>`
           ).join('');
 
+      // Désactive la case du VLAN natif dans la liste taggée (pas les deux en même temps)
+      if (currentNativeId) {
+        const cb = listEl.querySelector(`.vlan-checkbox[data-vlan-id="${currentNativeId}"]`);
+        if (cb) setCheckboxNativeDisabled(cb, true);
+      }
+
       openModal('modal-assign-vlan');
+    }
+
+    /**
+     * Active/désactive visuellement la case d'un VLAN taggé (car il est sélectionné comme natif)
+     */
+    function setCheckboxNativeDisabled(cb, disabled) {
+      const label = cb.closest('label');
+      if (disabled) {
+        cb.checked = false;
+        cb.disabled = true;
+        label.classList.remove('border-blue-400', 'dark:border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/30');
+        label.classList.add('border-gray-200', 'dark:border-gray-600', 'bg-white', 'dark:bg-gray-700',
+                            'opacity-40', 'cursor-not-allowed');
+        label.style.pointerEvents = 'none';
+      } else {
+        cb.disabled = false;
+        label.classList.remove('opacity-40', 'cursor-not-allowed');
+        label.style.pointerEvents = '';
+      }
+    }
+
+    /**
+     * Appelé quand le select du VLAN natif change.
+     * Désactive la case correspondante dans la liste taggée.
+     */
+    function onNativeVlanChange(select) {
+      const newNativeId = select.value ? parseInt(select.value) : null;
+      // Ré-active toutes les cases qui étaient désactivées
+      document.querySelectorAll('.vlan-checkbox[disabled]').forEach(cb => setCheckboxNativeDisabled(cb, false));
+      // Désactive la case du nouveau VLAN natif
+      if (newNativeId) {
+        const cb = document.querySelector(`.vlan-checkbox[data-vlan-id="${newNativeId}"]`);
+        if (cb) setCheckboxNativeDisabled(cb, true);
+      }
     }
 
     /**
      * Met à jour le style visuel d'une ligne VLAN quand la case est cochée/décochée
      */
     function updateCheckboxStyle(checkbox) {
+      // Si on coche un VLAN qui est actuellement le VLAN natif → effacer le natif
+      if (checkbox.checked) {
+        const nativeSelect = document.getElementById('port-native-vlan-select');
+        if (nativeSelect.value && parseInt(nativeSelect.value) === parseInt(checkbox.dataset.vlanId)) {
+          nativeSelect.value = '';
+        }
+      }
       const label = checkbox.closest('label');
       if (checkbox.checked) {
         label.classList.add('border-blue-400', 'dark:border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/30');
@@ -1981,9 +2029,11 @@
       if (nativeId) portNativeVlan[editingPortIndex] = nativeId;
       else delete portNativeVlan[editingPortIndex];
 
-      // VLANs taggés cochés
+      // VLANs taggés cochés (exclut le VLAN natif par sécurité)
       const checked    = document.querySelectorAll('.vlan-checkbox:checked');
-      const taggedIds  = Array.from(checked).map(cb => parseInt(cb.dataset.vlanId));
+      const taggedIds  = Array.from(checked)
+        .map(cb => parseInt(cb.dataset.vlanId))
+        .filter(id => id !== nativeId);
 
       if (taggedIds.length === 0) delete portAssignments[editingPortIndex];
       else portAssignments[editingPortIndex] = taggedIds;
