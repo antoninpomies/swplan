@@ -3111,7 +3111,23 @@
       const LACP_LEGEND_H     = lacpAggregates.length > 0
         ? 24 + Math.ceil(lacpAggregates.length / LACP_LEGEND_COLS) * LACP_LEGEND_ROW_H + 32
         : 0;
+      // Descriptions des ports : collecte les ports qui ont une description
+      const totalPorts = currentModel;
+      const portDescEntries = [];
+      for (let i = 0; i < totalPorts; i++) {
+        const desc = portDescriptions[i];
+        if (desc) {
+          const lbl = i >= totalEthernetPorts ? `SFP${i - totalEthernetPorts + 1}` : `${i + 1}`;
+          portDescEntries.push({ label: lbl, desc });
+        }
+      }
+      const DESC_COLS   = 3;
+      const DESC_ROW_H  = 16;
+      const DESC_H      = portDescEntries.length > 0
+        ? 24 + Math.ceil(portDescEntries.length / DESC_COLS) * DESC_ROW_H + 20
+        : 0;
       const DOC_H        = PAD + HEADER_H + 20 + CHASSIS_H + 20
+        + DESC_H
         + PORT_MODE_H
         + LEGEND_H + (LEGEND_H > 0 ? 20 : 0)
         + LACP_LEGEND_H
@@ -3345,6 +3361,48 @@
       });
 
       curY += CHASSIS_H + 20;
+
+      // ══════════════════════════════════════════════════════════
+      // DESCRIPTIONS DES PORTS
+      // ══════════════════════════════════════════════════════════
+
+      if (portDescEntries.length > 0) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = 'bold 10px system-ui, sans-serif';
+        ctx.fillText('DESCRIPTIONS DES PORTS', PAD, curY + 14);
+
+        const descItemW = (DOC_W - PAD * 2) / DESC_COLS;
+        portDescEntries.forEach((entry, i) => {
+          const col = i % DESC_COLS;
+          const row = Math.floor(i / DESC_COLS);
+          const ix  = PAD + col * descItemW;
+          const iy  = curY + 24 + row * DESC_ROW_H;
+
+          // Numéro du port
+          ctx.fillStyle = '#6b7280';
+          ctx.font = 'bold 8.5px system-ui, sans-serif';
+          ctx.fillText(`Port ${entry.label}`, ix, iy + 9);
+
+          // Séparateur tiret
+          ctx.fillStyle = '#d1d5db';
+          ctx.fillText('—', ix + 40, iy + 9);
+
+          // Description (tronquée si trop longue)
+          ctx.fillStyle = '#111827';
+          ctx.font = '9px system-ui, sans-serif';
+          let desc = entry.desc;
+          const maxDescW = descItemW - 56;
+          while (desc.length > 3 && ctx.measureText(desc).width > maxDescW) desc = desc.slice(0, -1);
+          if (desc !== entry.desc) desc += '…';
+          ctx.fillText(desc, ix + 50, iy + 9);
+        });
+
+        curY += DESC_H;
+
+        // Séparateur
+        ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD, curY - 4); ctx.lineTo(DOC_W - PAD, curY - 4); ctx.stroke();
+      }
 
       // ══════════════════════════════════════════════════════════
       // LÉGENDE DES VLANs
