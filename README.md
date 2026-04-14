@@ -2,7 +2,7 @@
 
 Outil de planification visuelle pour switches réseau. Configurez vos VLANs, assignez des ports (access, tagged, trunk), créez des agrégats LACP et exportez votre plan en PNG ou PDF.
 
-**Démo en ligne :** [swplan.antoninpomies.fr](https://swplan.antoninpomies.fr)
+**Site officiel :** [antoninpomies.github.io/swplan](https://antoninpomies.github.io/swplan/)
 
 ---
 
@@ -36,7 +36,7 @@ Aucune installation requise. Le projet est un fichier HTML autonome.
 
 Visual planning tool for network switches. Configure VLANs, assign ports (access, tagged, trunk), create LACP aggregates and export your plan as PNG or PDF.
 
-**Live demo:** [swplan.antoninpomies.fr](https://swplan.antoninpomies.fr)
+**Official site:** [antoninpomies.github.io/swplan](https://antoninpomies.github.io/swplan/)
 
 ---
 
